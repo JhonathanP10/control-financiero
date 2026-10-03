@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
-const SUPABASE_URL = 'https://mvsepnwkkcibzskuapsz.supabase.co/rest/v1/'
+// CORRECCIÓN: La URL va limpia, sin /rest/v1/ al final
+const SUPABASE_URL = 'https://mvsepnwkkcibzskuapsz.supabase.co'
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im12c2Vwbndra2NpYnpza3VhcHN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA5MDc0MTAsImV4cCI6MjEwNjQ4MzQxMH0.pDg6hJTFl7MnuadztS_cmZLgKk9rydvmlHtEfhT25H0'
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
@@ -11,7 +12,6 @@ const formGasto = document.getElementById('form-gasto')
 
 async function inicializar() {
     try {
-        // Consultamos la tabla en minúsculas 'gastos'
         const { data, error } = await supabase.from('gastos').select('*').limit(15).order('id', { ascending: false })
         if (error) throw error
 
@@ -55,7 +55,6 @@ formGasto.addEventListener('submit', async (e) => {
         metodo_de_pago: 'Efectivo'
     }
 
-    // Insertamos también en la tabla en minúsculas 'gastos'
     const { error } = await supabase.from('gastos').insert([nuevoGasto])
     if (error) {
         alert('Hubo un error al guardar: ' + error.message)
