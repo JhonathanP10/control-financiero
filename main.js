@@ -74,12 +74,23 @@ function mostrarVista(vista) {
 }
 document.querySelectorAll('.nav-item').forEach(b => b.addEventListener('click', () => mostrarVista(b.dataset.vista)));
 
-// Función para alternar entre la pestaña de Gastos e Ingresos en la vista Registrar
+// Cambio de pestaña estético mejorado con clases dinámicas para la burbuja
 window.cambiarTab = function(tipo) {
   const esIngreso = String(tipo).toLowerCase().includes('ingreso');
   const fg = document.getElementById('formGasto');
   const fi = document.getElementById('formIngreso');
   
+  // Buscar botones de pestañas por sus textos o clases comunes
+  const botonesTab = document.querySelectorAll('button[onclick*="cambiarTab"]');
+  botonesTab.forEach(btn => {
+    const esBtnIngreso = btn.textContent.toLowerCase().includes('ingreso');
+    if (esIngreso === esBtnIngreso) {
+      btn.className = "flex-1 py-2 text-xs font-bold rounded-2xl bg-white text-slate-900 shadow-sm transition-all";
+    } else {
+      btn.className = "flex-1 py-2 text-xs font-semibold rounded-2xl text-slate-500 hover:text-slate-800 transition-all";
+    }
+  });
+
   if (fg && fi) {
     if (esIngreso) {
       fg.classList.add('hidden');
@@ -730,7 +741,7 @@ window.guardarCategoria = async function(e) {
     tipo: getE('confTipo')?.value || 'Gasto',
     grupo: getE('confGrupo')?.value || null,
     categoria: getE('confCategoria')?.value || 'Nueva',
-    presupuesto: parseFloat(getE('confPresupuesto')?.value || 0) || 0
+    presupuesto: parseFloat(getE('confPresupuesto')?.value || 0) / 0 || 0
   };
 
   const { error } = await supabase.from('configuracion').insert([payload]);
@@ -742,7 +753,7 @@ window.guardarCategoria = async function(e) {
   }
 }
 
-window.togglePorType = function() {
+window.togglePorTipo = function() {
   const confTipo = document.getElementById('confTipo');
   if(!confTipo) return;
   const esIngreso = confTipo.value === 'Ingreso';
