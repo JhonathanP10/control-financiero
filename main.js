@@ -8,7 +8,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 let periodo = { preset: 'mes', offset: 0, desde: null, hasta: null };
 let cacheDatos = { 
   gastos: [], ingresos: [], configuracion: [], deudas: [], 
-  bcp: {tabla:'bcp', data:[]}, 
+  bcp: {tabla:'bcp_credito', data:[]}, 
   bbva_credito: {tabla:'bbva_credito', data:[]}, 
   bbva_tarjeta: {tabla:'bbva_tarjeta', data:[]} 
 };
@@ -39,12 +39,12 @@ function normalizar(obj) {
 
 async function fetchSafe(t1, t2) {
   let { data, error } = await supabase.from(t1).select('*').limit(5000);
-  if (!error) return { tabla: t1, data: (data || []).map(normalizar) };
+  if (!error && data) return { tabla: t1, data: data.map(normalizar) };
   if (t2) {
     let res2 = await supabase.from(t2).select('*').limit(5000);
-    if (!res2.error) return { tabla: t2, data: (res2.data || []).map(normalizar) };
+    if (!res2.error && res2.data) return { tabla: t2, data: res2.data.map(normalizar) };
   }
-  return { tabla: '', data: [] };
+  return { tabla: t1, data: [] };
 }
 
 /* Vistas */
@@ -155,6 +155,7 @@ window.cargarDashboard = async function() {
     cacheDatos.configuracion = (resC.data || []).map(normalizar);
     cacheDatos.deudas = (resD.data || []).map(normalizar);
 
+    // Carga robusta de las tablas de créditos
     cacheDatos.bcp = await fetchSafe('bcp_credito', 'bcp');
     cacheDatos.bbva_credito = await fetchSafe('bbva_credito', 'bbvacredito');
     cacheDatos.bbva_tarjeta = await fetchSafe('bbva_tarjeta', 'bbvatarjeta');
@@ -359,7 +360,7 @@ function procesarYRenderizarDashboard() {
   renderFondos();
 }
 
-// Módulo de Fondos ubicado exactamente reemplazando el bloque estático de "Pagos pendientes"
+// Módulo de Fondos y Autopago optimizado con detección precisa de créditos
 function renderFondos() {
   const dashView = document.getElementById('viewDash');
   if(!dashView) return;
@@ -386,9 +387,9 @@ function renderFondos() {
   const hoyIso = iso(new Date());
 
   const configCreditos = [
-      { titulo: 'BCP CRÉDITO', clave: 'bcp', catMatches: ['bcpcredito', 'bcp credito', 'bcp_credito'] },
-      { titulo: 'BBVA CRÉDITO', clave: 'bbva_credito', catMatches: ['bbvacredito', 'bbva credito', 'bbva_credito'] },
-      { titulo: 'BBVA TARJETA', clave: 'bbva_tarjeta', catMatches: ['bbvatarjeta', 'bbva tarjeta', 'bbva_tarjeta'] }
+      { titulo: 'BCP CRÉDITO', clave: 'bcp', catBusqueda: ['bcp', 'credito bcp', 'bcp credito', 'bcp_credito'] },
+      { titulo: 'BBVA CRÉDITO', clave: 'bbva_credito', catBusqueda: ['bbva', 'credito bbva', 'bbva credito', 'bbva_credito'] },
+      { titulo: 'BBVA TARJETA', clave: 'bbva_tarjeta', catBusqueda: ['tarjeta', 'bbva tarjeta', 'bbvatarjeta', 'bbva_tarjeta'] }
   ];
 
   let html = '<h3 class="text-sm font-bold text-slate-700 mb-3">Pagos pendientes</h3><div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
@@ -398,12 +399,22 @@ function renderFondos() {
       const cuotas = datosObj.data || [];
       const tablaBd = datosObj.tabla;
       
-      // 1. Calcular fondo abonado buscando en los gastos
+      // 1. Calcular fondo abonado buscando en la categoría o descripción del gasto
       let fondoTotal = 0;
       cacheDatos.gastos.forEach(g => {
-          const catStr = (g.categoria || '').toLowerCase().trim();
-          const coincide = cred.catMatches.some(m => catStr.includes(m) || catStr.replace(/[^a-z0-9]/g, '').includes(m.replace(/[^a-z0-9]/g, '')));
-          if (coincide) {
+          const cat = (g.categoria || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          const desc = (g.descripcion || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          
+          const match = cred.catBusqueda.some(term => {
+              const tNorm = term.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+              return cat.includes(tNorm) || desc.includes(tNorm);
+          });
+
+          // Filtro especial para diferenciar BBVA Crédito vs BBVA Tarjeta
+          if (cred.clave === 'bbva_credito' && cat.includes('tarjeta')) return;
+          if (cred.clave === 'bbva_tarjeta' && !cat.includes('tarjeta') && !desc.includes('tarjeta')) return;
+
+          if (match) {
               fondoTotal += (Number(g.monto) || 0);
           }
       });
@@ -466,7 +477,7 @@ function renderFondos() {
           </div>
           ${prox ? `
               <div class="text-xs text-slate-600 flex justify-between mb-1.5"><span class="font-medium"><i class="fa-regular fa-calendar mr-1"></i> Vence: ${proxFecha}</span> <span class="font-bold text-slate-800">${proxMonto}</span></div>
-              <div class="w-full bg-slate-100 rounded-full h-2 mb-1.5"><div class="${color} h-2 rounded-full transition-all" style="width:${porc}%"></div></div>
+              <div class="w-full bg-slate-200 rounded-full h-2 mb-1.5"><div class="${color} h-2 rounded-full transition-all" style="width:${porc}%"></div></div>
               <p class="text-[10px] text-slate-400 text-right font-medium">${porc.toFixed(0)}% de la cuota cubierto</p>
           ` : `<div class="mt-4 text-center p-2 bg-emerald-50 rounded-xl border border-emerald-100"><p class="text-xs text-emerald-600 font-bold"><i class="fa-solid fa-check-circle mr-1"></i>¡Todas las cuotas al día!</p></div>`}
       </div>`;
@@ -477,7 +488,7 @@ function renderFondos() {
 }
 
 // ---------------------------------------------------------------------------------
-// REGISTRO DE GASTOS E INGRESOS BLINDADO
+// REGISTRO DE GASTOS E INGRESOS BLINDADO Y SEPARADO
 // ---------------------------------------------------------------------------------
 
 window.enviarGasto = async function(e) {
@@ -499,15 +510,10 @@ window.enviarGasto = async function(e) {
     const resp = document.getElementById('responsableGasto')?.value;
     if(resp) payload.responsable = resp;
 
-    const det = document.getElementById('descripcionGasto')?.value || document.getElementById('comentarioGasto')?.value;
+    const det = document.getElementById('descripcionGasto')?.value;
     if(det) payload.descripcion = det; 
 
-    let { error } = await supabase.from('gastos').insert([payload]);
-    if (error && error.message.includes("descripcion")) {
-        delete payload.descripcion;
-        payload.comentario = det;
-        error = (await supabase.from('gastos').insert([payload])).error;
-    }
+    const { error } = await supabase.from('gastos').insert([payload]);
     if (error) throw error;
     
     if(btn) { btn.innerText = 'Registrar salida'; btn.disabled = false; }
@@ -518,7 +524,7 @@ window.enviarGasto = async function(e) {
 
   } catch(err) {
     if(btn) { btn.innerText = 'Registrar salida'; btn.disabled = false; }
-    toast('ERROR: ' + (err.message || JSON.stringify(err)), false);
+    toast('ERROR GASTO: ' + err.message, false);
   }
 }
 
@@ -531,7 +537,7 @@ window.enviarIngreso = async function(e) {
     const monto = parseFloat(document.getElementById('montoIngreso')?.value || 0) || 0;
     if(monto <= 0) throw new Error("Debes ingresar un monto válido mayor a cero.");
 
-    // Enviamos solo los campos esenciales y seguros para evitar que Supabase rechace columnas extras
+    // Objeto limpio sin mezclar columnas con la tabla gastos
     const payload = {
       fecha: document.getElementById('fechaIngreso')?.value || iso(new Date()),
       categoria: document.getElementById('categoriaIngreso')?.value || 'Ingreso',
@@ -541,15 +547,23 @@ window.enviarIngreso = async function(e) {
     const resp = document.getElementById('responsableIngreso')?.value;
     if(resp) payload.responsable = resp;
 
+    const com = document.getElementById('comentarioIngreso')?.value;
+    if(com) payload.comentario = com;
+
     let res = await supabase.from('ingresos').insert([payload]);
 
+    if (res.error && res.error.message.includes('comentario')) {
+        delete payload.comentario;
+        payload.descripcion = com;
+        res = await supabase.from('ingresos').insert([payload]);
+    }
+    
     if (res.error && res.error.message.includes('responsable')) {
         delete payload.responsable;
         res = await supabase.from('ingresos').insert([payload]);
     }
 
     if (res.error) {
-        // Último intento ultra básico
         res = await supabase.from('ingresos').insert([{
             fecha: payload.fecha,
             monto: payload.monto
@@ -566,7 +580,7 @@ window.enviarIngreso = async function(e) {
 
   } catch(err) {
     if(btn) { btn.innerText = 'Registrar entrada'; btn.disabled = false; }
-    toast('ERROR INGRESOS: ' + (err.message || JSON.stringify(err)), false);
+    toast('ERROR INGRESOS: ' + err.message, false);
   }
 }
 
