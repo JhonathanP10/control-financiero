@@ -50,7 +50,7 @@ async function fetchSafe(...nombresPosibles) {
   return { tabla: '', data: [] };
 }
 
-/* Vistas */
+/* Vistas y Pestañas */
 function mostrarVista(vista) {
   const mapa = { dash: 'viewDash', registro: 'viewRegistro', deudas: 'viewDeudas', config: 'viewConfig' };
   Object.keys(mapa).forEach(v => {
@@ -73,6 +73,23 @@ function mostrarVista(vista) {
   }, 250);
 }
 document.querySelectorAll('.nav-item').forEach(b => b.addEventListener('click', () => mostrarVista(b.dataset.vista)));
+
+// Función para alternar entre la pestaña de Gastos e Ingresos en la vista Registrar
+window.cambiarTab = function(tipo) {
+  const esIngreso = String(tipo).toLowerCase().includes('ingreso');
+  const fg = document.getElementById('formGasto');
+  const fi = document.getElementById('formIngreso');
+  
+  if (fg && fi) {
+    if (esIngreso) {
+      fg.classList.add('hidden');
+      fi.classList.remove('hidden');
+    } else {
+      fi.classList.add('hidden');
+      fg.classList.remove('hidden');
+    }
+  }
+};
 
 /* Periodo */
 function calcularRango() {
@@ -428,7 +445,6 @@ function renderFondos() {
           return fA > fB ? 1 : -1;
       });
 
-      // Motor de Autopago seguro sin llamadas inválidas
       for (let c of cuotasPendientes) {
           const fVenc = c.proximo_vencimiento || c.vencimiento || c.fecha || '';
           const montoCuota = Number(c.monto || c.cuota || 0);
@@ -726,7 +742,7 @@ window.guardarCategoria = async function(e) {
   }
 }
 
-window.togglePorTipo = function() {
+window.togglePorType = function() {
   const confTipo = document.getElementById('confTipo');
   if(!confTipo) return;
   const esIngreso = confTipo.value === 'Ingreso';
