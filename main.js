@@ -155,7 +155,6 @@ window.cargarDashboard = async function() {
     cacheDatos.configuracion = (resC.data || []).map(normalizar);
     cacheDatos.deudas = (resD.data || []).map(normalizar);
 
-    // Carga robusta de las tablas de créditos
     cacheDatos.bcp = await fetchSafe('bcp_credito', 'bcp');
     cacheDatos.bbva_credito = await fetchSafe('bbva_credito', 'bbvacredito');
     cacheDatos.bbva_tarjeta = await fetchSafe('bbva_tarjeta', 'bbvatarjeta');
@@ -360,7 +359,7 @@ function procesarYRenderizarDashboard() {
   renderFondos();
 }
 
-// Módulo de Fondos y Autopago optimizado con detección precisa de créditos
+// Módulo de Fondos y Autopago adaptado a "BCP Crédito", "BBVA Crédito" y columna "proximo_vencimiento"
 function renderFondos() {
   const dashView = document.getElementById('viewDash');
   if(!dashView) return;
@@ -387,9 +386,9 @@ function renderFondos() {
   const hoyIso = iso(new Date());
 
   const configCreditos = [
-      { titulo: 'BCP CRÉDITO', clave: 'bcp', catBusqueda: ['bcp', 'credito bcp', 'bcp credito', 'bcp_credito'] },
-      { titulo: 'BBVA CRÉDITO', clave: 'bbva_credito', catBusqueda: ['bbva', 'credito bbva', 'bbva credito', 'bbva_credito'] },
-      { titulo: 'BBVA TARJETA', clave: 'bbva_tarjeta', catBusqueda: ['tarjeta', 'bbva tarjeta', 'bbvatarjeta', 'bbva_tarjeta'] }
+      { titulo: 'BCP CRÉDITO', clave: 'bcp', nombreCat: 'bcp crédito' },
+      { titulo: 'BBVA CRÉDITO', clave: 'bbva_credito', nombreCat: 'bbva crédito' },
+      { titulo: 'BBVA TARJETA', clave: 'bbva_tarjeta', nombreCat: 'bbva tarjeta' }
   ];
 
   let html = '<h3 class="text-sm font-bold text-slate-700 mb-3">Pagos pendientes</h3><div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
@@ -399,22 +398,13 @@ function renderFondos() {
       const cuotas = datosObj.data || [];
       const tablaBd = datosObj.tabla;
       
-      // 1. Calcular fondo abonado buscando en la categoría o descripción del gasto
+      // 1. Sumar los gastos que coincidan exactamente con la categoría (ej: "BCP Crédito")
       let fondoTotal = 0;
       cacheDatos.gastos.forEach(g => {
-          const cat = (g.categoria || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-          const desc = (g.descripcion || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          const catGasto = (g.categoria || '').toLowerCase().trim();
+          const catBuscada = cred.nombreCat.toLowerCase().trim();
           
-          const match = cred.catBusqueda.some(term => {
-              const tNorm = term.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-              return cat.includes(tNorm) || desc.includes(tNorm);
-          });
-
-          // Filtro especial para diferenciar BBVA Crédito vs BBVA Tarjeta
-          if (cred.clave === 'bbva_credito' && cat.includes('tarjeta')) return;
-          if (cred.clave === 'bbva_tarjeta' && !cat.includes('tarjeta') && !desc.includes('tarjeta')) return;
-
-          if (match) {
+          if (catGasto === catBuscada) {
               fondoTotal += (Number(g.monto) || 0);
           }
       });
@@ -423,8 +413,8 @@ function renderFondos() {
       let cuotasPendientes = [];
       
       cuotas.forEach(c => {
-          const pag = (c.pagado || c.estado || c.status || '').toString().toLowerCase().trim();
-          const montoCuota = Number(c.monto || c.cuota || c.valor || 0);
+          const pag = (c.pagado || c.estado || '').toString().toLowerCase().trim();
+          const montoCuota = Number(c.monto || c.cuota || 0);
           
           if (pag === 'fondo') {
               fondoUsado += montoCuota; 
@@ -435,16 +425,17 @@ function renderFondos() {
 
       let fondoDisponible = Math.max(0, fondoTotal - fondoUsado);
 
+      // 2. Ordenar cuotas pendientes usando proximo_vencimiento
       cuotasPendientes.sort((a, b) => {
-          const fA = a.vencimiento || a.fechavencimiento || a.fecha || a.fechapago || a.venc || '9999-12-31';
-          const fB = b.vencimiento || b.fechavencimiento || b.fecha || b.fechapago || b.venc || '9999-12-31';
+          const fA = a.proximo_vencimiento || a.vencimiento || a.fecha || '9999-12-31';
+          const fB = b.proximo_vencimiento || b.vencimiento || b.fecha || '9999-12-31';
           return fA > fB ? 1 : -1;
       });
 
-      // Motor de Autopago
+      // 3. Motor de Autopago
       for (let c of cuotasPendientes) {
-          const fVenc = c.vencimiento || c.fechavencimiento || c.fecha || c.fechapago || c.venc || '';
-          const montoCuota = Number(c.monto || c.cuota || c.valor || 0);
+          const fVenc = c.proximo_vencimiento || c.vencimiento || c.fecha || '';
+          const montoCuota = Number(c.monto || c.cuota || 0);
 
           if (fVenc && fVenc <= hoyIso && fondoDisponible >= montoCuota && montoCuota > 0) {
               if (tablaBd) {
@@ -458,10 +449,10 @@ function renderFondos() {
       cuotasPendientes = cuotasPendientes.filter(c => c.pagado !== 'Fondo');
 
       const prox = cuotasPendientes[0];
-      const montoProxVal = prox ? Number(prox.monto || prox.cuota || prox.valor || 0) : 0;
+      const montoProxVal = prox ? Number(prox.monto || prox.cuota || 0) : 0;
       const proxMonto = S(montoProxVal);
       
-      let rawFecha = prox ? (prox.vencimiento || prox.fechavencimiento || prox.fecha || prox.fechapago || prox.venc || '') : '';
+      let rawFecha = prox ? (prox.proximo_vencimiento || prox.vencimiento || prox.fecha || '') : '';
       const proxFecha = rawFecha ? rawFecha.substring(0, 10) : 'Sin fecha';
       
       const porc = (montoProxVal > 0) ? Math.min(100, (fondoDisponible / montoProxVal) * 100) : 100;
@@ -488,7 +479,7 @@ function renderFondos() {
 }
 
 // ---------------------------------------------------------------------------------
-// REGISTRO DE GASTOS E INGRESOS BLINDADO Y SEPARADO
+// REGISTRO DE GASTOS E INGRESOS TOTALMENTE AISLADOS Y SEGUROS
 // ---------------------------------------------------------------------------------
 
 window.enviarGasto = async function(e) {
@@ -537,7 +528,7 @@ window.enviarIngreso = async function(e) {
     const monto = parseFloat(document.getElementById('montoIngreso')?.value || 0) || 0;
     if(monto <= 0) throw new Error("Debes ingresar un monto válido mayor a cero.");
 
-    // Objeto limpio sin mezclar columnas con la tabla gastos
+    // Estructura limpia y directa para la tabla ingresos
     const payload = {
       fecha: document.getElementById('fechaIngreso')?.value || iso(new Date()),
       categoria: document.getElementById('categoriaIngreso')?.value || 'Ingreso',
@@ -552,20 +543,11 @@ window.enviarIngreso = async function(e) {
 
     let res = await supabase.from('ingresos').insert([payload]);
 
-    if (res.error && res.error.message.includes('comentario')) {
-        delete payload.comentario;
-        payload.descripcion = com;
-        res = await supabase.from('ingresos').insert([payload]);
-    }
-    
-    if (res.error && res.error.message.includes('responsable')) {
-        delete payload.responsable;
-        res = await supabase.from('ingresos').insert([payload]);
-    }
-
     if (res.error) {
+        // Fallback ultra seguro si alguna columna adicional no existe en la tabla de Supabase
         res = await supabase.from('ingresos').insert([{
             fecha: payload.fecha,
+            categoria: payload.categoria,
             monto: payload.monto
         }]);
     }
