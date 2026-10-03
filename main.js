@@ -18,9 +18,10 @@ const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g,
 const iso = d => d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
 const dm = d => ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2);
 
+// Notificador a prueba de fallos (si no tienes el div 'toast' en tu HTML, usa un alert clásico)
 function toast(msg, ok) {
   const t = document.getElementById('toast');
-  if(!t) return;
+  if(!t) { alert(msg); return; } 
   t.className = 'fixed bottom-24 lg:bottom-8 right-4 z-50 max-w-xs rounded-2xl px-4 py-3 text-sm font-medium shadow-xl ' + (ok === false ? 'bg-rose-600 text-white' : 'bg-slate-900 text-white');
   t.innerText = msg;
   clearTimeout(t._t);
@@ -37,7 +38,7 @@ function normalizar(obj) {
   return nuevo;
 }
 
-// Lector seguro para tablas dinámicas
+// Lector seguro para tablas de créditos
 async function fetchSafe(t1, t2) {
   let { data, error } = await supabase.from(t1).select('*').limit(5000);
   if (!error) return { tabla: t1, data: (data || []).map(normalizar) };
@@ -45,7 +46,7 @@ async function fetchSafe(t1, t2) {
     let res2 = await supabase.from(t2).select('*').limit(5000);
     if (!res2.error) return { tabla: t2, data: (res2.data || []).map(normalizar) };
   }
-  return { tabla: t1, data: [] };
+  return { tabla: '', data: [] };
 }
 
 /* Vistas */
@@ -157,6 +158,7 @@ window.cargarDashboard = async function() {
     cacheDatos.configuracion = (resC.data || []).map(normalizar);
     cacheDatos.deudas = (resD.data || []).map(normalizar);
 
+    // Cargar tablas de créditos de forma segura
     cacheDatos.bcp = await fetchSafe('bcp_credito', 'bcp');
     cacheDatos.bbva_credito = await fetchSafe('bbva_credito', 'bbvacredito');
     cacheDatos.bbva_tarjeta = await fetchSafe('bbva_tarjeta', 'bbvatarjeta');
@@ -361,17 +363,24 @@ function procesarYRenderizarDashboard() {
   renderFondos();
 }
 
-// Fondos y Autopago
+// NUEVO: Módulo de Fondos reubicado al Dashboard Principal
 function renderFondos() {
-  const deudasView = document.getElementById('viewDeudas');
-  if(!deudasView) return;
+  const dashView = document.getElementById('viewDash');
+  if(!dashView) return;
 
   let contenedor = document.getElementById('panelFondosCreditos');
   if (!contenedor) {
       contenedor = document.createElement('div');
       contenedor.id = 'panelFondosCreditos';
-      contenedor.className = 'mb-6 mt-6';
-      deudasView.insertBefore(contenedor, deudasView.firstChild);
+      contenedor.className = 'mb-6 mt-6 w-full';
+      
+      // Intentamos insertarlo antes de la lista de movimientos para que destaque
+      const panelMov = document.getElementById('panelMovimientos');
+      if (panelMov && panelMov.parentNode) {
+          panelMov.parentNode.insertBefore(contenedor, panelMov);
+      } else {
+          dashView.prepend(contenedor);
+      }
   }
   
   const hoyIso = iso(new Date());
@@ -419,7 +428,7 @@ function renderFondos() {
           return fA > fB ? 1 : -1;
       });
 
-      // Motor de Autopago
+      // Autopago Inteligente
       for (let c of cuotasPendientes) {
           const fVenc = c.vencimiento || c.fechavencimiento || c.fecha || '';
           const montoCuota = Number(c.monto || c.cuota) || 0;
@@ -463,109 +472,101 @@ function renderFondos() {
 }
 
 // ---------------------------------------------------------------------------------
-// NUEVAS FUNCIONES SÚPER-SEGURAS PARA REGISTRAR Y EDITAR (A prueba de errores HTML/BD)
+// NUEVAS FUNCIONES DE REGISTRO "INDESTRUCTIBLES" Y CON ALERTAS DE ERROR CLARAS
 // ---------------------------------------------------------------------------------
 
 window.enviarGasto = async function(e) {
-  e.preventDefault();
+  if(e) e.preventDefault();
   const btn = document.getElementById('btnGuardarGasto');
   if(btn) { btn.innerText = 'Registrando...'; btn.disabled = true; }
 
   try {
-    const elFecha = document.getElementById('fechaGasto');
-    const elCat = document.getElementById('categoriaGasto');
     const elMonto = document.getElementById('montoGasto');
-    const elResp = document.getElementById('responsableGasto');
-    const elDetalle = document.getElementById('descripcionGasto') || document.getElementById('comentarioGasto');
+    const monto = parseFloat(elMonto ? elMonto.value : 0) || 0;
+    if(monto <= 0) throw new Error("Debes ingresar un monto válido mayor a cero.");
 
     const payload = {
-      fecha: elFecha ? elFecha.value : iso(new Date()),
-      categoria: elCat ? elCat.value : 'Gasto',
-      monto: parseFloat(elMonto ? elMonto.value : 0),
+      fecha: document.getElementById('fechaGasto')?.value || iso(new Date()),
+      categoria: document.getElementById('categoriaGasto')?.value || 'Gasto',
+      monto: monto,
       metodo_de_pago: 'App Web'
     };
 
-    if(elResp) payload.responsable = elResp.value;
-    if(elDetalle) payload.descripcion = elDetalle.value || null; // Intentamos con descripcion primero
+    const resp = document.getElementById('responsableGasto')?.value;
+    if(resp) payload.responsable = resp;
 
-    const { error } = await supabase.from('gastos').insert([payload]);
+    const det = document.getElementById('descripcionGasto')?.value || document.getElementById('comentarioGasto')?.value;
+    if(det) payload.descripcion = det; 
 
-    if (error) {
-       // Si Supabase se queja de la columna descripcion, intentamos con comentario
-       if(error.message.includes("descripcion")) {
-           delete payload.descripcion;
-           if(elDetalle) payload.comentario = elDetalle.value || null;
-           const retry = await supabase.from('gastos').insert([payload]);
-           if(retry.error) throw retry.error;
-       } else {
-           throw error;
-       }
+    let { error } = await supabase.from('gastos').insert([payload]);
+
+    if (error && error.message.includes("descripcion")) {
+        delete payload.descripcion;
+        payload.comentario = det;
+        error = (await supabase.from('gastos').insert([payload])).error;
     }
+
+    if (error) throw error;
     
     if(btn) { btn.innerText = 'Registrar salida'; btn.disabled = false; }
-    const form = document.getElementById('formGasto');
-    if(form) form.reset();
-    if(elFecha) elFecha.valueAsDate = new Date();
+    document.getElementById('formGasto')?.reset();
+    if(document.getElementById('fechaGasto')) document.getElementById('fechaGasto').valueAsDate = new Date();
     toast('Gasto registrado con éxito', true);
     cargarDashboard();
 
   } catch(err) {
     if(btn) { btn.innerText = 'Registrar salida'; btn.disabled = false; }
-    toast('Error: ' + err.message, false);
+    toast('ERROR BD: ' + (err.message || JSON.stringify(err)), false);
   }
 }
 
 window.enviarIngreso = async function(e) {
-  e.preventDefault();
+  if(e) e.preventDefault();
   const btn = document.getElementById('btnGuardarIngreso');
   if(btn) { btn.innerText = 'Registrando...'; btn.disabled = true; }
 
   try {
-    const elFecha = document.getElementById('fechaIngreso');
-    const elCat = document.getElementById('categoriaIngreso');
     const elMonto = document.getElementById('montoIngreso');
-    const elResp = document.getElementById('responsableIngreso');
-    const elDetalle = document.getElementById('comentarioIngreso') || document.getElementById('descripcionIngreso');
+    const monto = parseFloat(elMonto ? elMonto.value : 0) || 0;
+    if(monto <= 0) throw new Error("Debes ingresar un monto válido mayor a cero.");
 
     const payload = {
-      fecha: elFecha ? elFecha.value : iso(new Date()),
-      categoria: elCat ? elCat.value : 'Ingreso',
-      monto: parseFloat(elMonto ? elMonto.value : 0)
+      fecha: document.getElementById('fechaIngreso')?.value || iso(new Date()),
+      categoria: document.getElementById('categoriaIngreso')?.value || 'Ingreso',
+      monto: monto
     };
 
-    if(elResp && elResp.value) payload.responsable = elResp.value;
-    if(elDetalle) payload.comentario = elDetalle.value || null; // Intentamos con comentario primero
+    const resp = document.getElementById('responsableIngreso')?.value;
+    if(resp) payload.responsable = resp;
 
-    const { error } = await supabase.from('ingresos').insert([payload]);
+    const det = document.getElementById('comentarioIngreso')?.value || document.getElementById('descripcionIngreso')?.value;
+    
+    // Auto-reparación inteligente: si Supabase rechaza columnas, intentamos alternativas
+    if (det) payload.comentario = det; 
+    let res = await supabase.from('ingresos').insert([payload]);
 
-    if (error) {
-       // Si Supabase rechaza 'comentario', intentamos con 'descripcion'
-       if(error.message.includes("comentario")) {
-           delete payload.comentario;
-           if(elDetalle) payload.descripcion = elDetalle.value || null;
-           const retry1 = await supabase.from('ingresos').insert([payload]);
-           if(retry1.error) throw retry1.error;
-       } 
-       // Si Supabase rechaza 'responsable'
-       else if(error.message.includes("responsable")) {
-           delete payload.responsable;
-           const retry2 = await supabase.from('ingresos').insert([payload]);
-           if(retry2.error) throw retry2.error;
-       } else {
-           throw error;
-       }
+    if (res.error && res.error.message.includes('comentario')) {
+        delete payload.comentario;
+        payload.descripcion = det;
+        res = await supabase.from('ingresos').insert([payload]);
     }
     
+    if (res.error && res.error.message.includes('responsable')) {
+        delete payload.responsable;
+        res = await supabase.from('ingresos').insert([payload]);
+    }
+
+    if (res.error) throw res.error;
+    
     if(btn) { btn.innerText = 'Registrar entrada'; btn.disabled = false; }
-    const form = document.getElementById('formIngreso');
-    if(form) form.reset();
-    if(elFecha) elFecha.valueAsDate = new Date();
+    document.getElementById('formIngreso')?.reset();
+    if(document.getElementById('fechaIngreso')) document.getElementById('fechaIngreso').valueAsDate = new Date();
     toast('Ingreso registrado con éxito', true);
     cargarDashboard();
 
   } catch(err) {
     if(btn) { btn.innerText = 'Registrar entrada'; btn.disabled = false; }
-    toast('Error: ' + err.message, false);
+    toast('ERROR BD: ' + (err.message || JSON.stringify(err)), false);
   }
 }
 
@@ -606,17 +607,17 @@ window.cerrarModalEdicion = function() {
 }
 
 window.enviarEdicionMovimiento = async function(e) {
-  e.preventDefault();
+  if(e) e.preventDefault();
   try {
       const getE = i => document.getElementById(i);
-      const id = getE('editMovId') ? getE('editMovId').value : null;
-      const tipo = getE('editMovTipo') ? getE('editMovTipo').value : 'Gasto';
+      const id = getE('editMovId')?.value;
+      const tipo = getE('editMovTipo')?.value || 'Gasto';
       const tabla = tipo === 'Gasto' ? 'gastos' : 'ingresos';
 
       const payload = {
-        monto: parseFloat(getE('editMovMonto') ? getE('editMovMonto').value : 0),
-        fecha: getE('editMovFecha') ? getE('editMovFecha').value : null,
-        categoria: getE('editMovCategoria') ? getE('editMovCategoria').value : null
+        monto: parseFloat(getE('editMovMonto')?.value || 0),
+        fecha: getE('editMovFecha')?.value,
+        categoria: getE('editMovCategoria')?.value
       };
 
       if(getE('editMovResponsable')) payload.responsable = getE('editMovResponsable').value;
@@ -686,22 +687,22 @@ window.cargarPlanDeudas = async function() {
 }
 
 window.guardarDeuda = async function(e) {
-  e.preventDefault();
+  if(e) e.preventDefault();
   const getE = i => document.getElementById(i);
   const payload = {
-    nombre: getE('deudaNombre') ? getE('deudaNombre').value : 'Nueva Deuda',
-    saldo_actual: parseFloat(getE('deudaSaldo') ? getE('deudaSaldo').value : 0),
-    tasa_anual: parseFloat(getE('deudaTasa') ? getE('deudaTasa').value : 0) || 0,
-    pago_minimo: parseFloat(getE('deudaMinimo') ? getE('deudaMinimo').value : 0),
-    dia_pago: parseInt(getE('deudaDia') ? getE('deudaDia').value : 15) || 15,
-    categoria_gasto: getE('deudaCategoria') ? getE('deudaCategoria').value : null,
-    saldo_inicial: parseFloat(getE('deudaSaldo') ? getE('deudaSaldo').value : 0)
+    nombre: getE('deudaNombre')?.value || 'Nueva Deuda',
+    saldo_actual: parseFloat(getE('deudaSaldo')?.value || 0),
+    tasa_anual: parseFloat(getE('deudaTasa')?.value || 0) || 0,
+    pago_minimo: parseFloat(getE('deudaMinimo')?.value || 0),
+    dia_pago: parseInt(getE('deudaDia')?.value || 15) || 15,
+    categoria_gasto: getE('deudaCategoria')?.value || null,
+    saldo_inicial: parseFloat(getE('deudaSaldo')?.value || 0)
   };
 
   const { error } = await supabase.from('deudas').insert([payload]);
   if (error) toast('Error al guardar deuda: ' + error.message, false);
   else {
-    if(getE('formDeuda')) getE('formDeuda').reset();
+    document.getElementById('formDeuda')?.reset();
     toast('Deuda guardada', true);
     cargarDashboard();
   }
@@ -733,19 +734,19 @@ function renderConfiguracion() {
 }
 
 window.guardarCategoria = async function(e) {
-  e.preventDefault();
+  if(e) e.preventDefault();
   const getE = i => document.getElementById(i);
   const payload = {
-    tipo: getE('confTipo') ? getE('confTipo').value : 'Gasto',
-    grupo: getE('confGrupo') ? getE('confGrupo').value : null,
-    categoria: getE('confCategoria') ? getE('confCategoria').value : 'Nueva',
-    presupuesto: parseFloat(getE('confPresupuesto') ? getE('confPresupuesto').value : 0) || 0
+    tipo: getE('confTipo')?.value || 'Gasto',
+    grupo: getE('confGrupo')?.value || null,
+    categoria: getE('confCategoria')?.value || 'Nueva',
+    presupuesto: parseFloat(getE('confPresupuesto')?.value || 0) || 0
   };
 
   const { error } = await supabase.from('configuracion').insert([payload]);
   if(error) toast('Error: ' + error.message, false);
   else {
-    if(getE('formCategoria')) getE('formCategoria').reset();
+    document.getElementById('formCategoria')?.reset();
     toast('Categoría guardada', true);
     cargarDashboard();
   }
