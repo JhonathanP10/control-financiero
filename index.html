@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Financiero - Supabase</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto space-y-6">
+        <header class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900">Control Financiero & Operaciones</h1>
+                <p class="text-sm text-slate-500">Conectado directamente a tu base de datos en Supabase</p>
+            </div>
+            <div id="status-conexion" class="text-xs px-3 py-1.5 rounded-full font-medium bg-amber-100 text-amber-700">
+                Conectando a Supabase...
+            </div>
+        </header>
+
+        <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <h2 class="text-lg font-semibold mb-4 text-slate-800">Registrar Nuevo Gasto</h2>
+            <form id="form-gasto" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-4">
+                <input type="date" id="g-fecha" required class="border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                <input type="text" id="g-categoria" placeholder="Categoría (Ej: Combustible)" required class="border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                <input type="text" id="g-descripcion" placeholder="Descripción" class="border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                <input type="number" step="0.01" id="g-monto" placeholder="Monto (Ej: 120.50)" required class="border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                <input type="text" id="g-responsable" placeholder="Responsable" class="border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg p-2.5 text-sm transition shadow-sm">
+                    Guardar Gasto
+                </button>
+            </form>
+        </section>
+
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-slate-800">Últimos Gastos Registrados</h2>
+                <button onclick="cargarDatos()" class="text-sm text-blue-600 hover:underline font-medium">Actualizar datos</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
+                            <th class="p-4">Fecha</th>
+                            <th class="p-4">Categoría</th>
+                            <th class="p-4">Descripción</th>
+                            <th class="p-4">Monto</th>
+                            <th class="p-4">Responsable</th>
+                            <th class="p-4">Método de Pago</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-gastos-cuerpo" class="divide-y divide-slate-100 text-sm">
+                        <tr><td colspan="6" class="p-6 text-center text-slate-400">Cargando registros...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <script type="module" src="/main.js"></script>
+</body>
+</html>
