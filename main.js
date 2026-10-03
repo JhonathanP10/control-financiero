@@ -18,7 +18,6 @@ const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g,
 const iso = d => d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
 const dm = d => ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2);
 
-// Notificador a prueba de fallos (si no tienes el div 'toast' en tu HTML, usa un alert clásico)
 function toast(msg, ok) {
   const t = document.getElementById('toast');
   if(!t) { alert(msg); return; } 
@@ -38,7 +37,6 @@ function normalizar(obj) {
   return nuevo;
 }
 
-// Lector seguro para tablas de créditos
 async function fetchSafe(t1, t2) {
   let { data, error } = await supabase.from(t1).select('*').limit(5000);
   if (!error) return { tabla: t1, data: (data || []).map(normalizar) };
@@ -158,7 +156,6 @@ window.cargarDashboard = async function() {
     cacheDatos.configuracion = (resC.data || []).map(normalizar);
     cacheDatos.deudas = (resD.data || []).map(normalizar);
 
-    // Cargar tablas de créditos de forma segura
     cacheDatos.bcp = await fetchSafe('bcp_credito', 'bcp');
     cacheDatos.bbva_credito = await fetchSafe('bbva_credito', 'bbvacredito');
     cacheDatos.bbva_tarjeta = await fetchSafe('bbva_tarjeta', 'bbvatarjeta');
@@ -363,7 +360,7 @@ function procesarYRenderizarDashboard() {
   renderFondos();
 }
 
-// NUEVO: Módulo de Fondos reubicado al Dashboard Principal
+// Módulo de Fondos reubicado exactamente donde estaba "Pagos pendientes"
 function renderFondos() {
   const dashView = document.getElementById('viewDash');
   if(!dashView) return;
@@ -374,10 +371,12 @@ function renderFondos() {
       contenedor.id = 'panelFondosCreditos';
       contenedor.className = 'mb-6 mt-6 w-full';
       
-      // Intentamos insertarlo antes de la lista de movimientos para que destaque
-      const panelMov = document.getElementById('panelMovimientos');
-      if (panelMov && panelMov.parentNode) {
-          panelMov.parentNode.insertBefore(contenedor, panelMov);
+      // Buscamos el bloque de Pagos pendientes original en el HTML para reemplazarlo o ponerlo ahí
+      const pagosPendientesEl = Array.from(document.querySelectorAll('div, h2, h3')).find(el => el.textContent.includes('Pagos pendientes'));
+      if (pagosPendientesEl) {
+          let targetBox = pagosPendientesEl.closest('div.bg-white') || pagosPendientesEl.parentElement;
+          targetBox.parentNode.insertBefore(contenedor, targetBox);
+          targetBox.style.display = 'none'; // Ocultamos el estático "Calculando..." viejo
       } else {
           dashView.prepend(contenedor);
       }
@@ -386,9 +385,9 @@ function renderFondos() {
   const hoyIso = iso(new Date());
 
   const configCreditos = [
-      { titulo: 'BCP Crédito', clave: 'bcp', catMatch: 'bcpcredito' },
-      { titulo: 'BBVA Crédito', clave: 'bbva_credito', catMatch: 'bbvacredito' },
-      { titulo: 'BBVA Tarjeta', clave: 'bbva_tarjeta', catMatch: 'bbvatarjeta' }
+      { titulo: 'BCP Crédito', clave: 'bcp', catMatches: ['bcpcredito', 'bcp credito', 'bcp_credito'] },
+      { titulo: 'BBVA Crédito', clave: 'bbva_credito', catMatches: ['bbvacredito', 'bbva credito', 'bbva_credito'] },
+      { titulo: 'BBVA Tarjeta', clave: 'bbva_tarjeta', catMatches: ['bbvatarjeta', 'bbva tarjeta', 'bbva_tarjeta'] }
   ];
 
   let html = '<h3 class="text-sm font-bold text-slate-700 mb-3">Fondos Acumulados y Próximas Cuotas</h3><div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
@@ -398,10 +397,12 @@ function renderFondos() {
       const cuotas = datosObj.data || [];
       const tablaBd = datosObj.tabla;
       
+      // 1. Calcular fondo abonado con coincidencias amplias en los gastos
       let fondoTotal = 0;
       cacheDatos.gastos.forEach(g => {
-          const catStr = (g.categoria || '').toLowerCase().replace(/[^a-z]/g, '');
-          if (catStr.includes(cred.catMatch)) {
+          const catStr = (g.categoria || '').toLowerCase().trim();
+          const coincide = cred.catMatches.some(m => catStr.includes(m) || catStr.replace(/[^a-z0-9]/g, '').includes(m.replace(/[^a-z0-9]/g, '')));
+          if (coincide) {
               fondoTotal += (Number(g.monto) || 0);
           }
       });
@@ -410,8 +411,8 @@ function renderFondos() {
       let cuotasPendientes = [];
       
       cuotas.forEach(c => {
-          const pag = (c.pagado || '').toString().toLowerCase().trim();
-          const montoCuota = Number(c.monto || c.cuota) || 0;
+          const pag = (c.pagado || c.estado || c.status || '').toString().toLowerCase().trim();
+          const montoCuota = Number(c.monto || c.cuota || c.valor || 0);
           
           if (pag === 'fondo') {
               fondoUsado += montoCuota; 
@@ -422,16 +423,17 @@ function renderFondos() {
 
       let fondoDisponible = Math.max(0, fondoTotal - fondoUsado);
 
+      // 2. Ordenar cuotas pendientes buscando cualquier columna de fecha/vencimiento posible
       cuotasPendientes.sort((a, b) => {
-          const fA = a.vencimiento || a.fechavencimiento || a.fecha || '9999-12-31';
-          const fB = b.vencimiento || b.fechavencimiento || b.fecha || '9999-12-31';
+          const fA = a.vencimiento || a.fechavencimiento || a.fecha || a.fechapago || a.venc || '9999-12-31';
+          const fB = b.vencimiento || b.fechavencimiento || b.fecha || b.fechapago || b.venc || '9999-12-31';
           return fA > fB ? 1 : -1;
       });
 
-      // Autopago Inteligente
+      // 3. Autopago Inteligente
       for (let c of cuotasPendientes) {
-          const fVenc = c.vencimiento || c.fechavencimiento || c.fecha || '';
-          const montoCuota = Number(c.monto || c.cuota) || 0;
+          const fVenc = c.vencimiento || c.fechavencimiento || c.fecha || c.fechapago || c.venc || '';
+          const montoCuota = Number(c.monto || c.cuota || c.valor || 0);
 
           if (fVenc && fVenc <= hoyIso && fondoDisponible >= montoCuota && montoCuota > 0) {
               if (tablaBd) {
@@ -445,10 +447,13 @@ function renderFondos() {
       cuotasPendientes = cuotasPendientes.filter(c => c.pagado !== 'Fondo');
 
       const prox = cuotasPendientes[0];
-      const proxMonto = prox ? S(Number(prox.monto || prox.cuota) || 0) : 'S/ 0.00';
-      const proxFecha = prox ? (prox.vencimiento || prox.fechavencimiento || prox.fecha || 'Sin fecha') : 'Sin cuotas';
+      const montoProxVal = prox ? Number(prox.monto || prox.cuota || prox.valor || 0) : 0;
+      const proxMonto = S(montoProxVal);
       
-      const porc = prox ? Math.min(100, (fondoDisponible / (Number(prox.monto || prox.cuota) || 1)) * 100) : 100;
+      let rawFecha = prox ? (prox.vencimiento || prox.fechavencimiento || prox.fecha || prox.fechapago || prox.venc || '') : '';
+      const proxFecha = rawFecha ? rawFecha.substring(0, 10) : 'Sin fecha';
+      
+      const porc = (montoProxVal > 0) ? Math.min(100, (fondoDisponible / montoProxVal) * 100) : 100;
       const color = porc >= 100 ? 'bg-emerald-500' : 'bg-sky-500';
 
       html += `<div class="bg-slate-50 rounded-3xl border border-slate-200 shadow-sm p-4">
@@ -460,7 +465,7 @@ function renderFondos() {
               </div>
           </div>
           ${prox ? `
-              <div class="text-xs text-slate-600 flex justify-between mb-1.5"><span class="font-medium"><i class="fa-regular fa-calendar mr-1"></i> Vence: ${proxFecha.substring(0,10)}</span> <span class="font-bold text-slate-800">${proxMonto}</span></div>
+              <div class="text-xs text-slate-600 flex justify-between mb-1.5"><span class="font-medium"><i class="fa-regular fa-calendar mr-1"></i> Vence: ${proxFecha}</span> <span class="font-bold text-slate-800">${proxMonto}</span></div>
               <div class="w-full bg-slate-200 rounded-full h-2 mb-1.5"><div class="${color} h-2 rounded-full transition-all" style="width:${porc}%"></div></div>
               <p class="text-[10px] text-slate-400 text-right font-medium">${porc.toFixed(0)}% de la cuota cubierto</p>
           ` : `<div class="mt-4 text-center p-2 bg-emerald-50 rounded-xl border border-emerald-100"><p class="text-xs text-emerald-600 font-bold"><i class="fa-solid fa-check-circle mr-1"></i>¡Todas las cuotas al día!</p></div>`}
@@ -472,7 +477,7 @@ function renderFondos() {
 }
 
 // ---------------------------------------------------------------------------------
-// NUEVAS FUNCIONES DE REGISTRO "INDESTRUCTIBLES" Y CON ALERTAS DE ERROR CLARAS
+// FUNCIONES DE REGISTRO BLINDADAS (Soluciona el botón de Ingresos)
 // ---------------------------------------------------------------------------------
 
 window.enviarGasto = async function(e) {
@@ -481,8 +486,7 @@ window.enviarGasto = async function(e) {
   if(btn) { btn.innerText = 'Registrando...'; btn.disabled = true; }
 
   try {
-    const elMonto = document.getElementById('montoGasto');
-    const monto = parseFloat(elMonto ? elMonto.value : 0) || 0;
+    const monto = parseFloat(document.getElementById('montoGasto')?.value || 0) || 0;
     if(monto <= 0) throw new Error("Debes ingresar un monto válido mayor a cero.");
 
     const payload = {
@@ -499,13 +503,11 @@ window.enviarGasto = async function(e) {
     if(det) payload.descripcion = det; 
 
     let { error } = await supabase.from('gastos').insert([payload]);
-
     if (error && error.message.includes("descripcion")) {
         delete payload.descripcion;
         payload.comentario = det;
         error = (await supabase.from('gastos').insert([payload])).error;
     }
-
     if (error) throw error;
     
     if(btn) { btn.innerText = 'Registrar salida'; btn.disabled = false; }
@@ -516,7 +518,7 @@ window.enviarGasto = async function(e) {
 
   } catch(err) {
     if(btn) { btn.innerText = 'Registrar salida'; btn.disabled = false; }
-    toast('ERROR BD: ' + (err.message || JSON.stringify(err)), false);
+    toast('ERROR: ' + (err.message || JSON.stringify(err)), false);
   }
 }
 
@@ -526,10 +528,10 @@ window.enviarIngreso = async function(e) {
   if(btn) { btn.innerText = 'Registrando...'; btn.disabled = true; }
 
   try {
-    const elMonto = document.getElementById('montoIngreso');
-    const monto = parseFloat(elMonto ? elMonto.value : 0) || 0;
+    const monto = parseFloat(document.getElementById('montoIngreso')?.value || 0) || 0;
     if(monto <= 0) throw new Error("Debes ingresar un monto válido mayor a cero.");
 
+    // Construimos un objeto base limpio solo con lo estrictamente necesario
     const payload = {
       fecha: document.getElementById('fechaIngreso')?.value || iso(new Date()),
       categoria: document.getElementById('categoriaIngreso')?.value || 'Ingreso',
@@ -540,20 +542,30 @@ window.enviarIngreso = async function(e) {
     if(resp) payload.responsable = resp;
 
     const det = document.getElementById('comentarioIngreso')?.value || document.getElementById('descripcionIngreso')?.value;
-    
-    // Auto-reparación inteligente: si Supabase rechaza columnas, intentamos alternativas
-    if (det) payload.comentario = det; 
+    if(det) payload.comentario = det;
+
+    // Primer intento con los nombres estándar de ingresos
     let res = await supabase.from('ingresos').insert([payload]);
 
+    // Si Supabase se queja por el comentario/descripción, probamos variaciones
     if (res.error && res.error.message.includes('comentario')) {
         delete payload.comentario;
-        payload.descripcion = det;
+        if(det) payload.descripcion = det;
         res = await supabase.from('ingresos').insert([payload]);
     }
     
     if (res.error && res.error.message.includes('responsable')) {
         delete payload.responsable;
         res = await supabase.from('ingresos').insert([payload]);
+    }
+
+    // Último recurso ultra-seguro por si la tabla solo pide monto y fecha
+    if (res.error) {
+        res = await supabase.from('ingresos').insert([{
+            fecha: payload.fecha,
+            categoria: payload.categoria,
+            monto: payload.monto
+        }]);
     }
 
     if (res.error) throw res.error;
@@ -566,7 +578,7 @@ window.enviarIngreso = async function(e) {
 
   } catch(err) {
     if(btn) { btn.innerText = 'Registrar entrada'; btn.disabled = false; }
-    toast('ERROR BD: ' + (err.message || JSON.stringify(err)), false);
+    toast('ERROR INGRESOS: ' + (err.message || JSON.stringify(err)), false);
   }
 }
 
@@ -629,17 +641,7 @@ window.enviarEdicionMovimiento = async function(e) {
       }
 
       const { error } = await supabase.from(tabla).update(payload).eq('id', id);
-      
-      if (error) {
-          if (tipo === 'Ingreso' && error.message.includes('comentario')) {
-              delete payload.comentario;
-              payload.descripcion = det ? det.value : null;
-              const retry = await supabase.from(tabla).update(payload).eq('id', id);
-              if (retry.error) throw retry.error;
-          } else {
-              throw error;
-          }
-      }
+      if (error) throw error;
       
       toast('Actualizado correctamente', true);
       cerrarModalEdicion();
@@ -754,7 +756,7 @@ window.guardarCategoria = async function(e) {
 
 window.togglePorTipo = function() {
   const confTipo = document.getElementById('confTipo');
-  if(!confTipo) return;
+  if(!confToken = confTipo) return;
   const esIngreso = confTipo.value === 'Ingreso';
   if(document.getElementById('divConfGrupo')) document.getElementById('divConfGrupo').style.display = esIngreso ? 'none' : 'block';
   if(document.getElementById('divConfPresupuesto')) document.getElementById('divConfPresupuesto').style.display = esIngreso ? 'none' : 'block';
