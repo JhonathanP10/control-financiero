@@ -130,7 +130,6 @@ window.aplicarRango = function() {
   periodo.desde = d; periodo.hasta = h; cargarDashboard();
 }
 
-/* Inicialización */
 document.addEventListener('DOMContentLoaded', () => {
   const hoy = new Date();
   if(document.getElementById('fechaIngreso')) document.getElementById('fechaIngreso').valueAsDate = hoy;
@@ -360,7 +359,7 @@ function procesarYRenderizarDashboard() {
   renderFondos();
 }
 
-// Módulo de Fondos reubicado exactamente donde estaba "Pagos pendientes"
+// Módulo de Fondos ubicado exactamente reemplazando el bloque estático de "Pagos pendientes"
 function renderFondos() {
   const dashView = document.getElementById('viewDash');
   if(!dashView) return;
@@ -371,12 +370,14 @@ function renderFondos() {
       contenedor.id = 'panelFondosCreditos';
       contenedor.className = 'mb-6 mt-6 w-full';
       
-      // Buscamos el bloque de Pagos pendientes original en el HTML para reemplazarlo o ponerlo ahí
-      const pagosPendientesEl = Array.from(document.querySelectorAll('div, h2, h3')).find(el => el.textContent.includes('Pagos pendientes'));
+      const pagosPendientesEl = Array.from(document.querySelectorAll('div, h2, h3')).find(el => el.textContent.trim() === 'Pagos pendientes');
       if (pagosPendientesEl) {
-          let targetBox = pagosPendientesEl.closest('div.bg-white') || pagosPendientesEl.parentElement;
-          targetBox.parentNode.insertBefore(contenedor, targetBox);
-          targetBox.style.display = 'none'; // Ocultamos el estático "Calculando..." viejo
+          let targetBox = pagosPendientesEl.closest('div.bg-white') || pagosPendientesEl.parentElement.parentElement;
+          if(targetBox && targetBox.parentElement) {
+              targetBox.parentElement.replaceChild(contenedor, targetBox);
+          } else {
+              dashView.prepend(contenedor);
+          }
       } else {
           dashView.prepend(contenedor);
       }
@@ -385,19 +386,19 @@ function renderFondos() {
   const hoyIso = iso(new Date());
 
   const configCreditos = [
-      { titulo: 'BCP Crédito', clave: 'bcp', catMatches: ['bcpcredito', 'bcp credito', 'bcp_credito'] },
-      { titulo: 'BBVA Crédito', clave: 'bbva_credito', catMatches: ['bbvacredito', 'bbva credito', 'bbva_credito'] },
-      { titulo: 'BBVA Tarjeta', clave: 'bbva_tarjeta', catMatches: ['bbvatarjeta', 'bbva tarjeta', 'bbva_tarjeta'] }
+      { titulo: 'BCP CRÉDITO', clave: 'bcp', catMatches: ['bcpcredito', 'bcp credito', 'bcp_credito'] },
+      { titulo: 'BBVA CRÉDITO', clave: 'bbva_credito', catMatches: ['bbvacredito', 'bbva credito', 'bbva_credito'] },
+      { titulo: 'BBVA TARJETA', clave: 'bbva_tarjeta', catMatches: ['bbvatarjeta', 'bbva tarjeta', 'bbva_tarjeta'] }
   ];
 
-  let html = '<h3 class="text-sm font-bold text-slate-700 mb-3">Fondos Acumulados y Próximas Cuotas</h3><div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
+  let html = '<h3 class="text-sm font-bold text-slate-700 mb-3">Pagos pendientes</h3><div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
 
   configCreditos.forEach(cred => {
       const datosObj = cacheDatos[cred.clave] || {tabla:'', data:[]};
       const cuotas = datosObj.data || [];
       const tablaBd = datosObj.tabla;
       
-      // 1. Calcular fondo abonado con coincidencias amplias en los gastos
+      // 1. Calcular fondo abonado buscando en los gastos
       let fondoTotal = 0;
       cacheDatos.gastos.forEach(g => {
           const catStr = (g.categoria || '').toLowerCase().trim();
@@ -423,14 +424,13 @@ function renderFondos() {
 
       let fondoDisponible = Math.max(0, fondoTotal - fondoUsado);
 
-      // 2. Ordenar cuotas pendientes buscando cualquier columna de fecha/vencimiento posible
       cuotasPendientes.sort((a, b) => {
           const fA = a.vencimiento || a.fechavencimiento || a.fecha || a.fechapago || a.venc || '9999-12-31';
           const fB = b.vencimiento || b.fechavencimiento || b.fecha || b.fechapago || b.venc || '9999-12-31';
           return fA > fB ? 1 : -1;
       });
 
-      // 3. Autopago Inteligente
+      // Motor de Autopago
       for (let c of cuotasPendientes) {
           const fVenc = c.vencimiento || c.fechavencimiento || c.fecha || c.fechapago || c.venc || '';
           const montoCuota = Number(c.monto || c.cuota || c.valor || 0);
@@ -456,17 +456,17 @@ function renderFondos() {
       const porc = (montoProxVal > 0) ? Math.min(100, (fondoDisponible / montoProxVal) * 100) : 100;
       const color = porc >= 100 ? 'bg-emerald-500' : 'bg-sky-500';
 
-      html += `<div class="bg-slate-50 rounded-3xl border border-slate-200 shadow-sm p-4">
+      html += `<div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-4">
           <div class="flex justify-between items-start mb-4">
               <p class="text-sm font-bold text-slate-800">${esc(cred.titulo)}</p>
               <div class="text-right">
-                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Fondo Actual</span>
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Fondo Actual</span>
                 <span class="text-sm font-bold text-sky-600 bg-sky-50 px-2 py-1 rounded-lg border border-sky-100">${S(fondoDisponible)}</span>
               </div>
           </div>
           ${prox ? `
               <div class="text-xs text-slate-600 flex justify-between mb-1.5"><span class="font-medium"><i class="fa-regular fa-calendar mr-1"></i> Vence: ${proxFecha}</span> <span class="font-bold text-slate-800">${proxMonto}</span></div>
-              <div class="w-full bg-slate-200 rounded-full h-2 mb-1.5"><div class="${color} h-2 rounded-full transition-all" style="width:${porc}%"></div></div>
+              <div class="w-full bg-slate-100 rounded-full h-2 mb-1.5"><div class="${color} h-2 rounded-full transition-all" style="width:${porc}%"></div></div>
               <p class="text-[10px] text-slate-400 text-right font-medium">${porc.toFixed(0)}% de la cuota cubierto</p>
           ` : `<div class="mt-4 text-center p-2 bg-emerald-50 rounded-xl border border-emerald-100"><p class="text-xs text-emerald-600 font-bold"><i class="fa-solid fa-check-circle mr-1"></i>¡Todas las cuotas al día!</p></div>`}
       </div>`;
@@ -477,7 +477,7 @@ function renderFondos() {
 }
 
 // ---------------------------------------------------------------------------------
-// FUNCIONES DE REGISTRO BLINDADAS (Soluciona el botón de Ingresos)
+// REGISTRO DE GASTOS E INGRESOS BLINDADO
 // ---------------------------------------------------------------------------------
 
 window.enviarGasto = async function(e) {
@@ -531,7 +531,7 @@ window.enviarIngreso = async function(e) {
     const monto = parseFloat(document.getElementById('montoIngreso')?.value || 0) || 0;
     if(monto <= 0) throw new Error("Debes ingresar un monto válido mayor a cero.");
 
-    // Construimos un objeto base limpio solo con lo estrictamente necesario
+    // Enviamos solo los campos esenciales y seguros para evitar que Supabase rechace columnas extras
     const payload = {
       fecha: document.getElementById('fechaIngreso')?.value || iso(new Date()),
       categoria: document.getElementById('categoriaIngreso')?.value || 'Ingreso',
@@ -541,29 +541,17 @@ window.enviarIngreso = async function(e) {
     const resp = document.getElementById('responsableIngreso')?.value;
     if(resp) payload.responsable = resp;
 
-    const det = document.getElementById('comentarioIngreso')?.value || document.getElementById('descripcionIngreso')?.value;
-    if(det) payload.comentario = det;
-
-    // Primer intento con los nombres estándar de ingresos
     let res = await supabase.from('ingresos').insert([payload]);
 
-    // Si Supabase se queja por el comentario/descripción, probamos variaciones
-    if (res.error && res.error.message.includes('comentario')) {
-        delete payload.comentario;
-        if(det) payload.descripcion = det;
-        res = await supabase.from('ingresos').insert([payload]);
-    }
-    
     if (res.error && res.error.message.includes('responsable')) {
         delete payload.responsable;
         res = await supabase.from('ingresos').insert([payload]);
     }
 
-    // Último recurso ultra-seguro por si la tabla solo pide monto y fecha
     if (res.error) {
+        // Último intento ultra básico
         res = await supabase.from('ingresos').insert([{
             fecha: payload.fecha,
-            categoria: payload.categoria,
             monto: payload.monto
         }]);
     }
@@ -650,8 +638,6 @@ window.enviarEdicionMovimiento = async function(e) {
       toast('Error al actualizar: ' + err.message, false);
   }
 }
-
-// ---------------------------------------------------------------------------------
 
 window.cargarPlanDeudas = async function() {
   const deudas = cacheDatos.deudas;
@@ -756,7 +742,7 @@ window.guardarCategoria = async function(e) {
 
 window.togglePorTipo = function() {
   const confTipo = document.getElementById('confTipo');
-  if(!confToken = confTipo) return;
+  if(!confTipo) return;
   const esIngreso = confTipo.value === 'Ingreso';
   if(document.getElementById('divConfGrupo')) document.getElementById('divConfGrupo').style.display = esIngreso ? 'none' : 'block';
   if(document.getElementById('divConfPresupuesto')) document.getElementById('divConfPresupuesto').style.display = esIngreso ? 'none' : 'block';
