@@ -37,14 +37,20 @@ function normalizar(obj) {
   return nuevo;
 }
 
-async function fetchSafe(t1, t2) {
-  let { data, error } = await supabase.from(t1).select('*').limit(5000);
-  if (!error && data) return { tabla: t1, data: data.map(normalizar) };
-  if (t2) {
-    let res2 = await supabase.from(t2).select('*').limit(5000);
-    if (!res2.error && res2.data) return { tabla: t2, data: res2.data.map(normalizar) };
+// Lector ultra seguro que nunca da error si una tabla no existe
+async function fetchSafe(...nombresPosibles) {
+  for (let nombre of nombresPosibles) {
+    if (!nombre) continue;
+    try {
+      let { data, error } = await supabase.from(nombre).select('*').limit(5000);
+      if (!error && data) {
+        return { tabla: nombre, data: data.map(normalizar) };
+      }
+    } catch (e) {
+      // Ignorar error de tabla no encontrada y probar la siguiente
+    }
   }
-  return { tabla: t1, data: [] };
+  return { tabla: nombresPosibles[0] || '', data: [] };
 }
 
 /* Vistas */
@@ -141,6 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.cargarDashboard = async function() {
   try {
+    // Cargamos gastos, ingresos, config y deudas de forma segura individualmente
     const [resG, resI, resC, resD] = await Promise.all([
       supabase.from('gastos').select('*').limit(100000).order('id', { ascending: false }),
       supabase.from('ingresos').select('*').limit(100000).order('id', { ascending: false }),
@@ -148,16 +155,15 @@ window.cargarDashboard = async function() {
       supabase.from('deudas').select('*').limit(5000)
     ]);
 
-    if (resG.error) throw resG.error;
+    cacheDatos.gastos = (!resG.error && resG.data) ? resG.data.map(normalizar) : [];
+    cacheDatos.ingresos = (!resI.error && resI.data) ? resI.data.map(normalizar) : [];
+    cacheDatos.configuracion = (!resC.error && resC.data) ? resC.data.map(normalizar) : [];
+    cacheDatos.deudas = (!resD.error && resD.data) ? resD.data.map(normalizar) : [];
 
-    cacheDatos.gastos = (resG.data || []).map(normalizar);
-    cacheDatos.ingresos = (resI.data || []).map(normalizar);
-    cacheDatos.configuracion = (resC.data || []).map(normalizar);
-    cacheDatos.deudas = (resD.data || []).map(normalizar);
-
-    cacheDatos.bcp = await fetchSafe('bcp_credito', 'bcp');
-    cacheDatos.bbva_credito = await fetchSafe('bbva_credito', 'bbvacredito');
-    cacheDatos.bbva_tarjeta = await fetchSafe('bbva_tarjeta', 'bbvatarjeta');
+    // Búsqueda flexible de tablas de créditos
+    cacheDatos.bcp = await fetchSafe('bcp_credito', 'bcp', 'bcpcredito');
+    cacheDatos.bbva_credito = await fetchSafe('bbva_credito', 'bbvacredito', 'bbva');
+    cacheDatos.bbva_tarjeta = await fetchSafe('bbva_tarjeta', 'bbvatarjeta', 'tarjeta_bbva');
 
     procesarYRenderizarDashboard();
   } catch (err) {
@@ -359,7 +365,7 @@ function procesarYRenderizarDashboard() {
   renderFondos();
 }
 
-// Módulo de Fondos y Autopago adaptado a "BCP Crédito", "BBVA Crédito" y columna "proximo_vencimiento"
+// Módulo de Fondos y Autopago usando proximo_vencimiento y categorías exactas
 function renderFondos() {
   const dashView = document.getElementById('viewDash');
   if(!dashView) return;
@@ -398,7 +404,7 @@ function renderFondos() {
       const cuotas = datosObj.data || [];
       const tablaBd = datosObj.tabla;
       
-      // 1. Sumar los gastos que coincidan exactamente con la categoría (ej: "BCP Crédito")
+      // 1. Sumar los gastos que coincidan con la categoría
       let fondoTotal = 0;
       cacheDatos.gastos.forEach(g => {
           const catGasto = (g.categoria || '').toLowerCase().trim();
@@ -479,7 +485,7 @@ function renderFondos() {
 }
 
 // ---------------------------------------------------------------------------------
-// REGISTRO DE GASTOS E INGRESOS TOTALMENTE AISLADOS Y SEGUROS
+// REGISTRO DE GASTOS E INGRESOS BLINDADO
 // ---------------------------------------------------------------------------------
 
 window.enviarGasto = async function(e) {
@@ -528,7 +534,6 @@ window.enviarIngreso = async function(e) {
     const monto = parseFloat(document.getElementById('montoIngreso')?.value || 0) || 0;
     if(monto <= 0) throw new Error("Debes ingresar un monto válido mayor a cero.");
 
-    // Estructura limpia y directa para la tabla ingresos
     const payload = {
       fecha: document.getElementById('fechaIngreso')?.value || iso(new Date()),
       categoria: document.getElementById('categoriaIngreso')?.value || 'Ingreso',
@@ -544,7 +549,6 @@ window.enviarIngreso = async function(e) {
     let res = await supabase.from('ingresos').insert([payload]);
 
     if (res.error) {
-        // Fallback ultra seguro si alguna columna adicional no existe en la tabla de Supabase
         res = await supabase.from('ingresos').insert([{
             fecha: payload.fecha,
             categoria: payload.categoria,
