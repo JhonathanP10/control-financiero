@@ -22,17 +22,12 @@ function toast(msg, ok) {
   t._t = setTimeout(() => t.classList.add('hidden'), 4000);
 }
 
-// --------------------------------------------------------
-// NUEVO: Normalizador a prueba de mayúsculas y tildes
-// --------------------------------------------------------
 function normalizar(obj) {
   const nuevo = {};
   for (let key in obj) {
-    // Convierte "Categoría", "CATEGORIA", "Categoria" en "categoria"
     const cleanKey = key.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
     nuevo[cleanKey] = obj[key];
   }
-  // Preservamos el ID original por si acaso viene en mayúscula
   nuevo.id = obj.id || obj.ID || obj.Id;
   return nuevo;
 }
@@ -125,17 +120,16 @@ document.addEventListener('DOMContentLoaded', () => {
 window.cargarDashboard = async function() {
   try {
     const [resG, resI, resC, resD] = await Promise.all([
-      supabase.from('gastos').select('*').order('id', { ascending: false }),
-      supabase.from('ingresos').select('*').order('id', { ascending: false }),
-      supabase.from('configuracion').select('*'),
-      supabase.from('deudas').select('*')
+      supabase.from('gastos').select('*').limit(100000).order('id', { ascending: false }),
+      supabase.from('ingresos').select('*').limit(100000).order('id', { ascending: false }),
+      supabase.from('configuracion').select('*').limit(5000),
+      supabase.from('deudas').select('*').limit(5000)
     ]);
 
     if (resG.error) throw resG.error;
     if (resI.error) throw resI.error;
     if (resC.error) throw resC.error;
 
-    // Normalizamos todos los datos que llegan para que no fallen por mayúsculas/minúsculas
     cacheDatos.gastos = (resG.data || []).map(normalizar);
     cacheDatos.ingresos = (resI.data || []).map(normalizar);
     cacheDatos.configuracion = (resC.data || []).map(normalizar);
@@ -144,7 +138,7 @@ window.cargarDashboard = async function() {
     procesarYRenderizarDashboard();
   } catch (err) {
     console.error(err);
-    toast('Error cargando datos de Supabase. Revisa la consola o las políticas RLS.', false);
+    toast('Error cargando datos de Supabase. Revisa la consola.', false);
   }
 }
 
@@ -152,7 +146,6 @@ function procesarYRenderizarDashboard() {
   const filtro = calcularRango();
   document.getElementById('etiquetaPeriodo').innerText = filtro.etiqueta;
 
-  // Llenar selects de categorías en Registro
   const selGasto = document.getElementById('categoriaGasto');
   const selIng = document.getElementById('categoriaIngreso');
   const selDeudaCat = document.getElementById('deudaCategoria');
@@ -185,7 +178,6 @@ function procesarYRenderizarDashboard() {
     if(selIng) selIng.appendChild(o);
   });
 
-  // Totales históricos
   let totalIngresos = cacheDatos.ingresos.reduce((s, x) => s + (Number(x.monto) || 0), 0);
   let totalGastos = cacheDatos.gastos.reduce((s, x) => s + (Number(x.monto) || 0), 0);
   let saldoHist = totalIngresos - totalGastos;
@@ -196,7 +188,6 @@ function procesarYRenderizarDashboard() {
   document.getElementById('sbIngresos').innerText = totalIngresos.toFixed(2);
   document.getElementById('sbGastos').innerText = totalGastos.toFixed(2);
 
-  // Stats por responsable
   const statsResp = { 'Jhonathan': { in: 0, out: 0, perIn: 0 }, 'Sindy': { in: 0, out: 0, perIn: 0 } };
   cacheDatos.ingresos.forEach(i => {
     const resp = i.responsable || 'Jhonathan';
@@ -214,19 +205,21 @@ function procesarYRenderizarDashboard() {
   document.getElementById('sinGastos').innerText = S(statsResp['Sindy'].out);
   document.getElementById('sinSaldo').innerText = S(statsResp['Sindy'].in - statsResp['Sindy'].out);
 
-  // Filtrado por periodo
-  const dInicio = new Date(filtro.desde + 'T00:00:00');
-  const dFin = new Date(filtro.hasta + 'T23:59:59');
+  // NUEVO: Filtro a prueba de Zonas Horarias comparando strings (YYYY-MM-DD)
+  const fDesdeStr = filtro.desde;
+  const fHastaStr = filtro.hasta;
 
   let ingresosPeriodo = 0, gastosPeriodo = 0;
   let gastosPorCat = {}, gastosPorGrupo = {}, ingresosPorCat = {};
   let movimientos = [];
 
   cacheDatos.ingresos.forEach(i => {
-    const f = new Date(i.fecha);
+    const fStr = i.fecha ? i.fecha.substring(0, 10) : '';
     const m = Number(i.monto) || 0;
     const resp = i.responsable || 'Jhonathan';
-    if (f >= dInicio && f <= dFin) {
+    
+    // Compara directamente el texto de la fecha, ignorando la zona horaria
+    if (fStr >= fDesdeStr && fStr <= fHastaStr) {
       ingresosPeriodo += m;
       if(statsResp[resp]) statsResp[resp].perIn += m;
       ingresosPorCat[i.categoria] = (ingresosPorCat[i.categoria] || 0) + m;
@@ -238,10 +231,11 @@ function procesarYRenderizarDashboard() {
   cacheDatos.configuracion.forEach(c => { if(c.tipo === 'Gasto' || c.tipo === 'gasto') grupoDeCat[c.categoria] = c.grupo || 'Sin grupo'; });
 
   cacheDatos.gastos.forEach(g => {
-    const f = new Date(g.fecha);
+    const fStr = g.fecha ? g.fecha.substring(0, 10) : '';
     const m = Number(g.monto) || 0;
     const resp = g.responsable || 'Jhonathan';
-    if (f >= dInicio && f <= dFin) {
+    
+    if (fStr >= fDesdeStr && fStr <= fHastaStr) {
       gastosPeriodo += m;
       gastosPorCat[g.categoria] = (gastosPorCat[g.categoria] || 0) + m;
       const grp = grupoDeCat[g.categoria] || 'Sin grupo';
@@ -262,7 +256,6 @@ function procesarYRenderizarDashboard() {
   elRes.innerText = (resPer >= 0 ? 'Te quedan ' : 'Vas sobre-gastado ') + S(Math.abs(resPer));
   elRes.className = 'text-[11px] mt-1 ' + (resPer >= 0 ? 'text-emerald-600' : 'text-rose-600');
 
-  // Presupuestos
   let totalTopeGlobal = 0, totalGastadoGlobal = 0;
   const panelPres = document.getElementById('panelPresupuestos');
   if(panelPres) panelPres.innerHTML = '';
@@ -287,7 +280,6 @@ function procesarYRenderizarDashboard() {
   const porcGlobal = totalTopeGlobal > 0 ? (totalGastadoGlobal / totalTopeGlobal) * 100 : 0;
   if(barraPres) barraPres.style.width = Math.min(porcGlobal, 100) + '%';
 
-  // Gasto por grupo
   const panelGrp = document.getElementById('panelGrupos');
   if(panelGrp) {
     panelGrp.innerHTML = '';
@@ -298,7 +290,6 @@ function procesarYRenderizarDashboard() {
     });
   }
 
-  // Ingresos por categoría
   const panelIngCat = document.getElementById('panelIngresosCat');
   if(panelIngCat) {
     panelIngCat.innerHTML = '';
@@ -309,12 +300,19 @@ function procesarYRenderizarDashboard() {
     });
   }
 
-  // Movimientos recientes
   const panelMov = document.getElementById('panelMovimientos');
   if(panelMov) {
     panelMov.innerHTML = '';
-    movimientos.sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
-    movimientos.slice(0, 40).forEach(m => {
+    
+    // NUEVO: Ordenamiento de movimientos más preciso y a prueba de fechas locales
+    movimientos.sort((a,b) => {
+      const fA = a.fecha ? a.fecha.substring(0,10) : '';
+      const fB = b.fecha ? b.fecha.substring(0,10) : '';
+      if (fA === fB) return b.id - a.id;
+      return fB > fA ? 1 : -1;
+    });
+
+    movimientos.slice(0, 50).forEach(m => {
       const ing = m.tipo === 'Ingreso';
       panelMov.innerHTML += `<div class="flex items-center gap-3 py-3">
         <div class="w-9 h-9 rounded-full flex items-center justify-center ${ing ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'} flex-shrink-0"><i class="fa-solid ${ing ? 'fa-arrow-down' : 'fa-arrow-up'} text-xs"></i></div>
@@ -337,14 +335,11 @@ function procesarYRenderizarDashboard() {
   renderConfiguracion();
 }
 
-/* Registrar Gasto/Ingreso */
 window.enviarGasto = async function(e) {
   e.preventDefault();
   const btn = document.getElementById('btnGuardarGasto');
   btn.innerText = 'Registrando...'; btn.disabled = true;
 
-  // Insertamos con nombres en minúscula, asegúrate de que en Supabase tus columnas
-  // se llamen 'monto', 'fecha', 'descripcion', etc. Si te da error de inserción, es por esto.
   const { error } = await supabase.from('gastos').insert([{
     fecha: document.getElementById('fechaGasto').value,
     categoria: document.getElementById('categoriaGasto').value,
@@ -387,7 +382,6 @@ window.enviarIngreso = async function(e) {
   }
 }
 
-/* Eliminar y Editar Movimientos */
 window.eliminarMov = async function(id, tipo) {
   if (!confirm('¿Seguro que deseas eliminar este registro?')) return;
   const tabla = tipo === 'Gasto' ? 'gastos' : 'ingresos';
@@ -450,7 +444,6 @@ window.enviarEdicionMovimiento = async function(e) {
   }
 }
 
-/* Deudas */
 window.cargarPlanDeudas = async function() {
   const deudas = cacheDatos.deudas;
   const vacio = document.getElementById('deudasVacio');
@@ -507,7 +500,6 @@ window.guardarDeuda = async function(e) {
   }
 }
 
-/* Categorías */
 function renderConfiguracion() {
   const cont = document.getElementById('contenedorGrupos');
   if(!cont) return;
