@@ -6,7 +6,12 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 let periodo = { preset: 'mes', offset: 0, desde: null, hasta: null };
-let cacheDatos = { gastos: [], ingresos: [], configuracion: [], deudas: [], bcp: [], bbva_credito: [], bbva_tarjeta: [] };
+let cacheDatos = { 
+  gastos: [], ingresos: [], configuracion: [], deudas: [], 
+  bcp: {tabla:'bcp', data:[]}, 
+  bbva_credito: {tabla:'bbva_credito', data:[]}, 
+  bbva_tarjeta: {tabla:'bbva_tarjeta', data:[]} 
+};
 
 const S = n => 'S/ ' + (Number(n) || 0).toFixed(2);
 const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -30,6 +35,17 @@ function normalizar(obj) {
   }
   nuevo.id = obj.id || obj.ID || obj.Id;
   return nuevo;
+}
+
+// Lector seguro para tablas dinámicas
+async function fetchSafe(t1, t2) {
+  let { data, error } = await supabase.from(t1).select('*').limit(5000);
+  if (!error) return { tabla: t1, data: (data || []).map(normalizar) };
+  if (t2) {
+    let res2 = await supabase.from(t2).select('*').limit(5000);
+    if (!res2.error) return { tabla: t2, data: (res2.data || []).map(normalizar) };
+  }
+  return { tabla: t1, data: [] };
 }
 
 /* Vistas */
@@ -127,13 +143,16 @@ window.cargarDashboard = async function() {
     ]);
 
     if (resG.error) throw resG.error;
-    if (resI.error) throw resI.error;
-    if (resC.error) throw resC.error;
 
     cacheDatos.gastos = (resG.data || []).map(normalizar);
     cacheDatos.ingresos = (resI.data || []).map(normalizar);
     cacheDatos.configuracion = (resC.data || []).map(normalizar);
     cacheDatos.deudas = (resD.data || []).map(normalizar);
+
+    // NUEVO: Cargar las tablas de los créditos de forma segura
+    cacheDatos.bcp = await fetchSafe('bcp_credito', 'bcp');
+    cacheDatos.bbva_credito = await fetchSafe('bbva_credito', 'bbvacredito');
+    cacheDatos.bbva_tarjeta = await fetchSafe('bbva_tarjeta', 'bbvatarjeta');
 
     procesarYRenderizarDashboard();
   } catch (err) {
@@ -205,7 +224,6 @@ function procesarYRenderizarDashboard() {
   document.getElementById('sinGastos').innerText = S(statsResp['Sindy'].out);
   document.getElementById('sinSaldo').innerText = S(statsResp['Sindy'].in - statsResp['Sindy'].out);
 
-  // NUEVO: Filtro a prueba de Zonas Horarias comparando strings (YYYY-MM-DD)
   const fDesdeStr = filtro.desde;
   const fHastaStr = filtro.hasta;
 
@@ -218,7 +236,6 @@ function procesarYRenderizarDashboard() {
     const m = Number(i.monto) || 0;
     const resp = i.responsable || 'Jhonathan';
     
-    // Compara directamente el texto de la fecha, ignorando la zona horaria
     if (fStr >= fDesdeStr && fStr <= fHastaStr) {
       ingresosPeriodo += m;
       if(statsResp[resp]) statsResp[resp].perIn += m;
@@ -304,7 +321,6 @@ function procesarYRenderizarDashboard() {
   if(panelMov) {
     panelMov.innerHTML = '';
     
-    // NUEVO: Ordenamiento de movimientos más preciso y a prueba de fechas locales
     movimientos.sort((a,b) => {
       const fA = a.fecha ? a.fecha.substring(0,10) : '';
       const fB = b.fecha ? b.fecha.substring(0,10) : '';
@@ -333,6 +349,120 @@ function procesarYRenderizarDashboard() {
 
   if(document.getElementById('cargandoAlertas')) document.getElementById('cargandoAlertas').style.display = 'none';
   renderConfiguracion();
+  renderFondos();
+}
+
+// NUEVO: Lógica de Fondos y Autopago
+function renderFondos() {
+  const deudasView = document.getElementById('viewDeudas');
+  if(!deudasView) return;
+
+  let contenedor = document.getElementById('panelFondosCreditos');
+  if (!contenedor) {
+      contenedor = document.createElement('div');
+      contenedor.id = 'panelFondosCreditos';
+      contenedor.className = 'mb-6 mt-6';
+      deudasView.insertBefore(contenedor, deudasView.firstChild);
+  }
+  
+  const hoyIso = iso(new Date());
+
+  const configCreditos = [
+      { titulo: 'BCP Crédito', clave: 'bcp', catMatch: 'bcpcredito' },
+      { titulo: 'BBVA Crédito', clave: 'bbva_credito', catMatch: 'bbvacredito' },
+      { titulo: 'BBVA Tarjeta', clave: 'bbva_tarjeta', catMatch: 'bbvatarjeta' }
+  ];
+
+  let html = '<h3 class="text-sm font-bold text-slate-700 mb-3">Fondos Acumulados y Próximas Cuotas</h3><div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
+
+  configCreditos.forEach(cred => {
+      const datosObj = cacheDatos[cred.clave] || {tabla:'', data:[]};
+      const cuotas = datosObj.data || [];
+      const tablaBd = datosObj.tabla;
+      
+      // 1. Calcular fondo abonado históricamente
+      let fondoTotal = 0;
+      cacheDatos.gastos.forEach(g => {
+          const catStr = (g.categoria || '').toLowerCase().replace(/[^a-z]/g, '');
+          if (catStr.includes(cred.catMatch)) {
+              fondoTotal += (Number(g.monto) || 0);
+          }
+      });
+
+      // 2. Separar lo ya gastado del fondo vs. Cuotas pagadas externas vs. Pendientes
+      let fondoUsado = 0;
+      let cuotasPendientes = [];
+      
+      cuotas.forEach(c => {
+          const pag = (c.pagado || '').toString().toLowerCase().trim();
+          const montoCuota = Number(c.monto || c.cuota) || 0;
+          
+          if (pag === 'fondo') {
+              fondoUsado += montoCuota; // Restamos porque el sistema ya lo autopagó antes
+          } else if (pag !== 'pagado' && pag !== 'si' && pag !== 'sí' && pag !== 'true' && pag !== '1' && c.pagado !== true) {
+              // Si no dice pagado, está pendiente
+              cuotasPendientes.push(c);
+          }
+      });
+
+      let fondoDisponible = Math.max(0, fondoTotal - fondoUsado);
+
+      // 3. Ordenar cuotas pendientes por fecha (la más vieja primero)
+      cuotasPendientes.sort((a, b) => {
+          const fA = a.vencimiento || a.fechavencimiento || a.fecha || '9999-12-31';
+          const fB = b.vencimiento || b.fechavencimiento || b.fecha || '9999-12-31';
+          return fA > fB ? 1 : -1;
+      });
+
+      // 4. MOTOR DE AUTOPAGO
+      for (let c of cuotasPendientes) {
+          const fVenc = c.vencimiento || c.fechavencimiento || c.fecha || '';
+          const montoCuota = Number(c.monto || c.cuota) || 0;
+
+          // Si ya venció o vence hoy, y la plata alcanza
+          if (fVenc && fVenc <= hoyIso && fondoDisponible >= montoCuota && montoCuota > 0) {
+              // Actualizar en Supabase de forma asíncrona ("Fondo" indica que se pagó automáticamente)
+              if (tablaBd) {
+                  supabase.from(tablaBd).update({ pagado: 'Fondo' }).eq('id', c.id).then(r => {
+                      if(!r.error) console.log(`Autopago exitoso: ${cred.titulo} - Monto: ${montoCuota}`);
+                  }).catch(() => {});
+              }
+              
+              // Ajustamos la matemática local
+              fondoDisponible -= montoCuota;
+              c.pagado = 'Fondo'; 
+          }
+      }
+
+      // 5. Filtramos las que se acaban de autopagar para dejar solo las REALMENTE pendientes
+      cuotasPendientes = cuotasPendientes.filter(c => c.pagado !== 'Fondo');
+
+      // 6. Preparar UI
+      const prox = cuotasPendientes[0];
+      const proxMonto = prox ? S(Number(prox.monto || prox.cuota) || 0) : 'S/ 0.00';
+      const proxFecha = prox ? (prox.vencimiento || prox.fechavencimiento || prox.fecha || 'Sin fecha') : 'Sin cuotas';
+      
+      const porc = prox ? Math.min(100, (fondoDisponible / (Number(prox.monto || prox.cuota) || 1)) * 100) : 100;
+      const color = porc >= 100 ? 'bg-emerald-500' : 'bg-sky-500';
+
+      html += `<div class="bg-slate-50 rounded-3xl border border-slate-200 shadow-sm p-4">
+          <div class="flex justify-between items-start mb-4">
+              <p class="text-sm font-bold text-slate-800">${esc(cred.titulo)}</p>
+              <div class="text-right">
+                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Fondo Actual</span>
+                <span class="text-sm font-bold text-sky-600 bg-sky-50 px-2 py-1 rounded-lg border border-sky-100">${S(fondoDisponible)}</span>
+              </div>
+          </div>
+          ${prox ? `
+              <div class="text-xs text-slate-600 flex justify-between mb-1.5"><span class="font-medium"><i class="fa-regular fa-calendar mr-1"></i> Vence: ${proxFecha.substring(0,10)}</span> <span class="font-bold text-slate-800">${proxMonto}</span></div>
+              <div class="w-full bg-slate-200 rounded-full h-2 mb-1.5"><div class="${color} h-2 rounded-full transition-all" style="width:${porc}%"></div></div>
+              <p class="text-[10px] text-slate-400 text-right font-medium">${porc.toFixed(0)}% de la cuota cubierto</p>
+          ` : `<div class="mt-4 text-center p-2 bg-emerald-50 rounded-xl border border-emerald-100"><p class="text-xs text-emerald-600 font-bold"><i class="fa-solid fa-check-circle mr-1"></i>¡Todas las cuotas al día!</p></div>`}
+      </div>`;
+  });
+
+  html += '</div>';
+  contenedor.innerHTML = html;
 }
 
 window.enviarGasto = async function(e) {
