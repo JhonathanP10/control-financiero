@@ -11,7 +11,8 @@ const formGasto = document.getElementById('form-gasto')
 
 async function inicializar() {
     try {
-        const { data, error } = await supabase.from('GASTOS').select('*').limit(15).order('id', { ascending: false })
+        // Consultamos la tabla en minúsculas 'gastos'
+        const { data, error } = await supabase.from('gastos').select('*').limit(15).order('id', { ascending: false })
         if (error) throw error
 
         statusBadge.textContent = 'Conectado a Supabase'
@@ -54,7 +55,8 @@ formGasto.addEventListener('submit', async (e) => {
         metodo_de_pago: 'Efectivo'
     }
 
-    const { error } = await supabase.from('GASTOS').insert([nuevoGasto])
+    // Insertamos también en la tabla en minúsculas 'gastos'
+    const { error } = await supabase.from('gastos').insert([nuevoGasto])
     if (error) {
         alert('Hubo un error al guardar: ' + error.message)
     } else {
