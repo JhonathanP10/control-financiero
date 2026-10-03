@@ -37,7 +37,6 @@ function normalizar(obj) {
   return nuevo;
 }
 
-// Lector ultra seguro que nunca da error si una tabla no existe
 async function fetchSafe(...nombresPosibles) {
   for (let nombre of nombresPosibles) {
     if (!nombre) continue;
@@ -46,11 +45,9 @@ async function fetchSafe(...nombresPosibles) {
       if (!error && data) {
         return { tabla: nombre, data: data.map(normalizar) };
       }
-    } catch (e) {
-      // Ignorar error de tabla no encontrada y probar la siguiente
-    }
+    } catch (e) {}
   }
-  return { tabla: nombresPosibles[0] || '', data: [] };
+  return { tabla: '', data: [] };
 }
 
 /* Vistas */
@@ -147,28 +144,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.cargarDashboard = async function() {
   try {
-    // Cargamos gastos, ingresos, config y deudas de forma segura individualmente
-    const [resG, resI, resC, resD] = await Promise.all([
-      supabase.from('gastos').select('*').limit(100000).order('id', { ascending: false }),
-      supabase.from('ingresos').select('*').limit(100000).order('id', { ascending: false }),
-      supabase.from('configuracion').select('*').limit(5000),
-      supabase.from('deudas').select('*').limit(5000)
-    ]);
+    const resG = await supabase.from('gastos').select('*').limit(100000).order('id', { ascending: false });
+    const resI = await supabase.from('ingresos').select('*').limit(100000).order('id', { ascending: false });
+    const resC = await supabase.from('configuracion').select('*').limit(5000);
+    const resD = await supabase.from('deudas').select('*').limit(5000);
 
     cacheDatos.gastos = (!resG.error && resG.data) ? resG.data.map(normalizar) : [];
     cacheDatos.ingresos = (!resI.error && resI.data) ? resI.data.map(normalizar) : [];
     cacheDatos.configuracion = (!resC.error && resC.data) ? resC.data.map(normalizar) : [];
     cacheDatos.deudas = (!resD.error && resD.data) ? resD.data.map(normalizar) : [];
 
-    // Búsqueda flexible de tablas de créditos
     cacheDatos.bcp = await fetchSafe('bcp_credito', 'bcp', 'bcpcredito');
     cacheDatos.bbva_credito = await fetchSafe('bbva_credito', 'bbvacredito', 'bbva');
     cacheDatos.bbva_tarjeta = await fetchSafe('bbva_tarjeta', 'bbvatarjeta', 'tarjeta_bbva');
 
     procesarYRenderizarDashboard();
   } catch (err) {
-    console.error(err);
-    toast('Error cargando datos de Supabase. Revisa la consola.', false);
+    console.error('Error detallado en consola:', err);
+    toast('Error cargando datos. Revisa la consola (F12).', false);
   }
 }
 
@@ -365,7 +358,6 @@ function procesarYRenderizarDashboard() {
   renderFondos();
 }
 
-// Módulo de Fondos y Autopago usando proximo_vencimiento y categorías exactas
 function renderFondos() {
   const dashView = document.getElementById('viewDash');
   if(!dashView) return;
@@ -404,7 +396,6 @@ function renderFondos() {
       const cuotas = datosObj.data || [];
       const tablaBd = datosObj.tabla;
       
-      // 1. Sumar los gastos que coincidan con la categoría
       let fondoTotal = 0;
       cacheDatos.gastos.forEach(g => {
           const catGasto = (g.categoria || '').toLowerCase().trim();
@@ -431,14 +422,12 @@ function renderFondos() {
 
       let fondoDisponible = Math.max(0, fondoTotal - fondoUsado);
 
-      // 2. Ordenar cuotas pendientes usando proximo_vencimiento
       cuotasPendientes.sort((a, b) => {
           const fA = a.proximo_vencimiento || a.vencimiento || a.fecha || '9999-12-31';
           const fB = b.proximo_vencimiento || b.vencimiento || b.fecha || '9999-12-31';
           return fA > fB ? 1 : -1;
       });
 
-      // 3. Motor de Autopago
       for (let c of cuotasPendientes) {
           const fVenc = c.proximo_vencimiento || c.vencimiento || c.fecha || '';
           const montoCuota = Number(c.monto || c.cuota || 0);
@@ -483,10 +472,6 @@ function renderFondos() {
   html += '</div>';
   contenedor.innerHTML = html;
 }
-
-// ---------------------------------------------------------------------------------
-// REGISTRO DE GASTOS E INGRESOS BLINDADO
-// ---------------------------------------------------------------------------------
 
 window.enviarGasto = async function(e) {
   if(e) e.preventDefault();
@@ -731,7 +716,7 @@ window.guardarCategoria = async function(e) {
     presupuesto: parseFloat(getE('confPresupuesto')?.value || 0) || 0
   };
 
-  const { error } = await supabase.from('configuracion').insert([payload]);
+  const { error } = await supabase.path ? null : supabase.from('configuracion').insert([payload]);
   if(error) toast('Error: ' + error.message, false);
   else {
     document.getElementById('formCategoria')?.reset();
