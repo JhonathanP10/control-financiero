@@ -22,6 +22,21 @@ function toast(msg, ok) {
   t._t = setTimeout(() => t.classList.add('hidden'), 4000);
 }
 
+// --------------------------------------------------------
+// NUEVO: Normalizador a prueba de mayúsculas y tildes
+// --------------------------------------------------------
+function normalizar(obj) {
+  const nuevo = {};
+  for (let key in obj) {
+    // Convierte "Categoría", "CATEGORIA", "Categoria" en "categoria"
+    const cleanKey = key.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    nuevo[cleanKey] = obj[key];
+  }
+  // Preservamos el ID original por si acaso viene en mayúscula
+  nuevo.id = obj.id || obj.ID || obj.Id;
+  return nuevo;
+}
+
 /* Vistas */
 function mostrarVista(vista) {
   const mapa = { dash: 'viewDash', registro: 'viewRegistro', deudas: 'viewDeudas', config: 'viewConfig' };
@@ -120,15 +135,16 @@ window.cargarDashboard = async function() {
     if (resI.error) throw resI.error;
     if (resC.error) throw resC.error;
 
-    cacheDatos.gastos = resG.data || [];
-    cacheDatos.ingresos = resI.data || [];
-    cacheDatos.configuracion = resC.data || [];
-    cacheDatos.deudas = resD.data || [];
+    // Normalizamos todos los datos que llegan para que no fallen por mayúsculas/minúsculas
+    cacheDatos.gastos = (resG.data || []).map(normalizar);
+    cacheDatos.ingresos = (resI.data || []).map(normalizar);
+    cacheDatos.configuracion = (resC.data || []).map(normalizar);
+    cacheDatos.deudas = (resD.data || []).map(normalizar);
 
     procesarYRenderizarDashboard();
   } catch (err) {
     console.error(err);
-    toast('Error cargando datos de Supabase', false);
+    toast('Error cargando datos de Supabase. Revisa la consola o las políticas RLS.', false);
   }
 }
 
@@ -147,7 +163,7 @@ function procesarYRenderizarDashboard() {
 
   const gruposG = {};
   cacheDatos.configuracion.forEach(c => {
-    if (c.tipo === 'Gasto') {
+    if (c.tipo === 'Gasto' || c.tipo === 'gasto') {
       const grp = c.grupo || 'Sin grupo';
       (gruposG[grp] = gruposG[grp] || []).push(c.categoria);
     }
@@ -164,7 +180,7 @@ function procesarYRenderizarDashboard() {
     if(selDeudaCat) selDeudaCat.appendChild(og2);
   }
 
-  cacheDatos.configuracion.filter(c => c.tipo === 'Ingreso').forEach(c => {
+  cacheDatos.configuracion.filter(c => c.tipo === 'Ingreso' || c.tipo === 'ingreso').forEach(c => {
     const o = document.createElement('option'); o.value = c.categoria; o.textContent = c.categoria;
     if(selIng) selIng.appendChild(o);
   });
@@ -215,11 +231,11 @@ function procesarYRenderizarDashboard() {
       if(statsResp[resp]) statsResp[resp].perIn += m;
       ingresosPorCat[i.categoria] = (ingresosPorCat[i.categoria] || 0) + m;
     }
-    movimientos.push({ id: i.id, tipo: 'Ingreso', fecha: i.fecha, categoria: i.categoria, monto: m, responsable: resp, detalle: i.comentario || '' });
+    movimientos.push({ id: i.id, tipo: 'Ingreso', fecha: i.fecha, categoria: i.categoria, monto: m, responsable: resp, detalle: i.comentario || i.descripcion || '' });
   });
 
   const grupoDeCat = {};
-  cacheDatos.configuracion.forEach(c => { if(c.tipo === 'Gasto') grupoDeCat[c.categoria] = c.grupo || 'Sin grupo'; });
+  cacheDatos.configuracion.forEach(c => { if(c.tipo === 'Gasto' || c.tipo === 'gasto') grupoDeCat[c.categoria] = c.grupo || 'Sin grupo'; });
 
   cacheDatos.gastos.forEach(g => {
     const f = new Date(g.fecha);
@@ -251,7 +267,7 @@ function procesarYRenderizarDashboard() {
   const panelPres = document.getElementById('panelPresupuestos');
   if(panelPres) panelPres.innerHTML = '';
   
-  cacheDatos.configuracion.filter(c => c.tipo === 'Gasto' && Number(c.presupuesto) > 0).forEach(c => {
+  cacheDatos.configuracion.filter(c => (c.tipo === 'Gasto' || c.tipo === 'gasto') && Number(c.presupuesto) > 0).forEach(c => {
     const tope = Number(c.presupuesto);
     const gastado = gastosPorCat[c.categoria] || 0;
     totalTopeGlobal += tope; totalGastadoGlobal += gastado;
@@ -304,7 +320,7 @@ function procesarYRenderizarDashboard() {
         <div class="w-9 h-9 rounded-full flex items-center justify-center ${ing ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'} flex-shrink-0"><i class="fa-solid ${ing ? 'fa-arrow-down' : 'fa-arrow-up'} text-xs"></i></div>
         <div class="flex-1 min-w-0">
           <p class="text-sm font-semibold text-slate-800 truncate">${esc(m.categoria)}</p>
-          <p class="text-[11px] text-slate-500 truncate">${esc(m.fecha)} · ${esc(m.responsable)}${m.detalle ? ' · ' + esc(m.detalle) : ''}</p>
+          <p class="text-[11px] text-slate-500 truncate">${esc(m.fecha ? m.fecha.substring(0,10) : '')} · ${esc(m.responsable)}${m.detalle ? ' · ' + esc(m.detalle) : ''}</p>
         </div>
         <div class="text-right">
           <span class="text-sm font-bold block ${ing ? 'text-emerald-600' : 'text-slate-800'}">${ing ? '+' : '−'}${S(m.monto)}</span>
@@ -327,6 +343,8 @@ window.enviarGasto = async function(e) {
   const btn = document.getElementById('btnGuardarGasto');
   btn.innerText = 'Registrando...'; btn.disabled = true;
 
+  // Insertamos con nombres en minúscula, asegúrate de que en Supabase tus columnas
+  // se llamen 'monto', 'fecha', 'descripcion', etc. Si te da error de inserción, es por esto.
   const { error } = await supabase.from('gastos').insert([{
     fecha: document.getElementById('fechaGasto').value,
     categoria: document.getElementById('categoriaGasto').value,
@@ -442,9 +460,9 @@ window.cargarPlanDeudas = async function() {
 
   if (!deudas.length) return;
 
-  const totalSaldo = deudas.reduce((s, d) => s + (Number(d.saldo_actual) || 0), 0);
-  const totalMinimos = deudas.reduce((s, d) => s + (Number(d.pago_minimo) || 0), 0);
-  const interesMensual = deudas.reduce((s, d) => s + (Number(d.saldo_actual) * ((Number(d.tasa_anual) / 100) / 12)), 0);
+  const totalSaldo = deudas.reduce((s, d) => s + (Number(d.saldo_actual || d.saldo) || 0), 0);
+  const totalMinimos = deudas.reduce((s, d) => s + (Number(d.pago_minimo || d.minimo) || 0), 0);
+  const interesMensual = deudas.reduce((s, d) => s + (Number(d.saldo_actual || d.saldo) * ((Number(d.tasa_anual || d.tasa) / 100) / 12)), 0);
 
   document.getElementById('dTotal').innerText = S(totalSaldo);
   document.getElementById('dMinimos').innerText = S(totalMinimos);
@@ -455,12 +473,12 @@ window.cargarPlanDeudas = async function() {
   if(lista) {
     lista.innerHTML = '';
     deudas.forEach(d => {
-      const saldo = Number(d.saldo_actual) || 0;
-      const inicial = Number(d.saldo_inicial) || saldo;
+      const saldo = Number(d.saldo_actual || d.saldo) || 0;
+      const inicial = Number(d.saldo_inicial || d.inicial) || saldo;
       const avance = inicial > 0 ? Math.min(100, Math.max(0, (1 - saldo / inicial) * 100)) : 0;
       lista.innerHTML += `<div class="border border-slate-100 rounded-2xl p-4">
         <p class="text-sm font-bold text-slate-800">${esc(d.nombre)}</p>
-        <p class="text-[11px] text-slate-500">${Number(d.tasa_anual || 0).toFixed(1)}% anual · mínimo ${S(d.pago_minimo)}</p>
+        <p class="text-[11px] text-slate-500">${Number(d.tasa_anual || d.tasa || 0).toFixed(1)}% anual · mínimo ${S(d.pago_minimo || d.minimo)}</p>
         <div class="flex justify-between text-xs my-1"><span class="font-bold text-slate-800">${S(saldo)}</span><span>${avance.toFixed(0)}% liquidado</span></div>
         <div class="w-full bg-slate-100 rounded-full h-2"><div class="bg-emerald-500 h-2 rounded-full" style="width:${avance}%"></div></div>
       </div>`;
@@ -498,7 +516,7 @@ function renderConfiguracion() {
   const grupos = {};
   cacheDatos.configuracion.forEach(c => {
     const grp = c.grupo || 'Sin grupo';
-    if(c.tipo === 'Gasto') (grupos[grp] = grupos[grp] || []).push(c);
+    if(c.tipo === 'Gasto' || c.tipo === 'gasto') (grupos[grp] = grupos[grp] || []).push(c);
   });
 
   let html = '<h3 class="text-sm font-bold text-slate-700 mb-3">Categorías de Gasto</h3><div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
