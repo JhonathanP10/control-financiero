@@ -17,10 +17,10 @@ const S = n => 'S/ ' + (Number(n) || 0).toFixed(2);
 const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const iso = d => d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
 const dm = d => ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2);
-const enAnios = m => m < 12 ? m + ' meses' : (Math.floor(m / 12) + ' a ' + (m % 12) + ' m');
 
 function toast(msg, ok) {
   const t = document.getElementById('toast');
+  if(!t) return;
   t.className = 'fixed bottom-24 lg:bottom-8 right-4 z-50 max-w-xs rounded-2xl px-4 py-3 text-sm font-medium shadow-xl ' + (ok === false ? 'bg-rose-600 text-white' : 'bg-slate-900 text-white');
   t.innerText = msg;
   clearTimeout(t._t);
@@ -30,7 +30,7 @@ function toast(msg, ok) {
 function normalizar(obj) {
   const nuevo = {};
   for (let key in obj) {
-    const cleanKey = key.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    const cleanKey = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     nuevo[cleanKey] = obj[key];
   }
   nuevo.id = obj.id || obj.ID || obj.Id;
@@ -51,16 +51,24 @@ async function fetchSafe(t1, t2) {
 /* Vistas */
 function mostrarVista(vista) {
   const mapa = { dash: 'viewDash', registro: 'viewRegistro', deudas: 'viewDeudas', config: 'viewConfig' };
-  Object.keys(mapa).forEach(v => document.getElementById(mapa[v]).classList.toggle('hidden', v !== vista));
+  Object.keys(mapa).forEach(v => {
+    const el = document.getElementById(mapa[v]);
+    if(el) el.classList.toggle('hidden', v !== vista);
+  });
   document.querySelectorAll('.nav-item').forEach(b => {
     const activo = b.dataset.vista === vista;
     b.classList.toggle('activo', activo);
   });
   const titulos = { dash: 'Panel', registro: 'Registrar', deudas: 'Salir de deudas', config: 'Categorías' };
-  if(document.getElementById('tituloVistaMovil')) document.getElementById('tituloVistaMovil').innerText = titulos[vista];
+  const titMovil = document.getElementById('tituloVistaMovil');
+  if(titMovil) titMovil.innerText = titulos[vista];
+  
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (vista === 'deudas') cargarPlanDeudas();
-  if (vista === 'registro') setTimeout(() => document.getElementById('montoGasto').focus(), 250);
+  if (vista === 'registro') setTimeout(() => {
+      const g = document.getElementById('montoGasto');
+      if(g) g.focus();
+  }, 250);
 }
 document.querySelectorAll('.nav-item').forEach(b => b.addEventListener('click', () => mostrarVista(b.dataset.vista)));
 
@@ -149,7 +157,6 @@ window.cargarDashboard = async function() {
     cacheDatos.configuracion = (resC.data || []).map(normalizar);
     cacheDatos.deudas = (resD.data || []).map(normalizar);
 
-    // NUEVO: Cargar las tablas de los créditos de forma segura
     cacheDatos.bcp = await fetchSafe('bcp_credito', 'bcp');
     cacheDatos.bbva_credito = await fetchSafe('bbva_credito', 'bbvacredito');
     cacheDatos.bbva_tarjeta = await fetchSafe('bbva_tarjeta', 'bbvatarjeta');
@@ -163,7 +170,8 @@ window.cargarDashboard = async function() {
 
 function procesarYRenderizarDashboard() {
   const filtro = calcularRango();
-  document.getElementById('etiquetaPeriodo').innerText = filtro.etiqueta;
+  const etiq = document.getElementById('etiquetaPeriodo');
+  if(etiq) etiq.innerText = filtro.etiqueta;
 
   const selGasto = document.getElementById('categoriaGasto');
   const selIng = document.getElementById('categoriaIngreso');
@@ -201,11 +209,11 @@ function procesarYRenderizarDashboard() {
   let totalGastos = cacheDatos.gastos.reduce((s, x) => s + (Number(x.monto) || 0), 0);
   let saldoHist = totalIngresos - totalGastos;
 
-  document.getElementById('saldoDisponible').innerText = S(saldoHist);
-  document.getElementById('sbSaldo').innerText = S(saldoHist);
+  if(document.getElementById('saldoDisponible')) document.getElementById('saldoDisponible').innerText = S(saldoHist);
+  if(document.getElementById('sbSaldo')) document.getElementById('sbSaldo').innerText = S(saldoHist);
   if(document.getElementById('sbSaldoMovil')) document.getElementById('sbSaldoMovil').innerText = S(saldoHist);
-  document.getElementById('sbIngresos').innerText = totalIngresos.toFixed(2);
-  document.getElementById('sbGastos').innerText = totalGastos.toFixed(2);
+  if(document.getElementById('sbIngresos')) document.getElementById('sbIngresos').innerText = totalIngresos.toFixed(2);
+  if(document.getElementById('sbGastos')) document.getElementById('sbGastos').innerText = totalGastos.toFixed(2);
 
   const statsResp = { 'Jhonathan': { in: 0, out: 0, perIn: 0 }, 'Sindy': { in: 0, out: 0, perIn: 0 } };
   cacheDatos.ingresos.forEach(i => {
@@ -217,12 +225,12 @@ function procesarYRenderizarDashboard() {
     if(statsResp[resp]) statsResp[resp].out += Number(g.monto) || 0;
   });
 
-  document.getElementById('jhoIngresos').innerText = S(statsResp['Jhonathan'].in);
-  document.getElementById('jhoGastos').innerText = S(statsResp['Jhonathan'].out);
-  document.getElementById('jhoSaldo').innerText = S(statsResp['Jhonathan'].in - statsResp['Jhonathan'].out);
-  document.getElementById('sinIngresos').innerText = S(statsResp['Sindy'].in);
-  document.getElementById('sinGastos').innerText = S(statsResp['Sindy'].out);
-  document.getElementById('sinSaldo').innerText = S(statsResp['Sindy'].in - statsResp['Sindy'].out);
+  if(document.getElementById('jhoIngresos')) document.getElementById('jhoIngresos').innerText = S(statsResp['Jhonathan'].in);
+  if(document.getElementById('jhoGastos')) document.getElementById('jhoGastos').innerText = S(statsResp['Jhonathan'].out);
+  if(document.getElementById('jhoSaldo')) document.getElementById('jhoSaldo').innerText = S(statsResp['Jhonathan'].in - statsResp['Jhonathan'].out);
+  if(document.getElementById('sinIngresos')) document.getElementById('sinIngresos').innerText = S(statsResp['Sindy'].in);
+  if(document.getElementById('sinGastos')) document.getElementById('sinGastos').innerText = S(statsResp['Sindy'].out);
+  if(document.getElementById('sinSaldo')) document.getElementById('sinSaldo').innerText = S(statsResp['Sindy'].in - statsResp['Sindy'].out);
 
   const fDesdeStr = filtro.desde;
   const fHastaStr = filtro.hasta;
@@ -261,38 +269,39 @@ function procesarYRenderizarDashboard() {
     movimientos.push({ id: g.id, tipo: 'Gasto', fecha: g.fecha, categoria: g.categoria, monto: m, responsable: resp, detalle: g.descripcion || '' });
   });
 
-  document.getElementById('periodoJhoIn').innerText = 'Jho: ' + S(statsResp['Jhonathan'].perIn);
-  document.getElementById('periodoSinIn').innerText = 'Sin: ' + S(statsResp['Sindy'].perIn);
-  document.getElementById('nombrePeriodo').innerText = filtro.etiqueta;
-  document.getElementById('periodoIngresos').innerText = S(ingresosPeriodo);
-  document.getElementById('periodoGastos').innerText = S(gastosPeriodo);
-  document.getElementById('periodoTasaAhorro').innerText = ingresosPeriodo > 0 ? ('Guardas el ' + ((ingresosPeriodo - gastosPeriodo)/ingresosPeriodo * 100).toFixed(0) + '%') : '';
+  if(document.getElementById('periodoJhoIn')) document.getElementById('periodoJhoIn').innerText = 'Jho: ' + S(statsResp['Jhonathan'].perIn);
+  if(document.getElementById('periodoSinIn')) document.getElementById('periodoSinIn').innerText = 'Sin: ' + S(statsResp['Sindy'].perIn);
+  if(document.getElementById('nombrePeriodo')) document.getElementById('nombrePeriodo').innerText = filtro.etiqueta;
+  if(document.getElementById('periodoIngresos')) document.getElementById('periodoIngresos').innerText = S(ingresosPeriodo);
+  if(document.getElementById('periodoGastos')) document.getElementById('periodoGastos').innerText = S(gastosPeriodo);
+  if(document.getElementById('periodoTasaAhorro')) document.getElementById('periodoTasaAhorro').innerText = ingresosPeriodo > 0 ? ('Guardas el ' + ((ingresosPeriodo - gastosPeriodo)/ingresosPeriodo * 100).toFixed(0) + '%') : '';
   
   const resPer = ingresosPeriodo - gastosPeriodo;
   const elRes = document.getElementById('periodoResultado');
-  elRes.innerText = (resPer >= 0 ? 'Te quedan ' : 'Vas sobre-gastado ') + S(Math.abs(resPer));
-  elRes.className = 'text-[11px] mt-1 ' + (resPer >= 0 ? 'text-emerald-600' : 'text-rose-600');
+  if(elRes) {
+    elRes.innerText = (resPer >= 0 ? 'Te quedan ' : 'Vas sobre-gastado ') + S(Math.abs(resPer));
+    elRes.className = 'text-[11px] mt-1 ' + (resPer >= 0 ? 'text-emerald-600' : 'text-rose-600');
+  }
 
   let totalTopeGlobal = 0, totalGastadoGlobal = 0;
   const panelPres = document.getElementById('panelPresupuestos');
-  if(panelPres) panelPres.innerHTML = '';
-  
-  cacheDatos.configuracion.filter(c => (c.tipo === 'Gasto' || c.tipo === 'gasto') && Number(c.presupuesto) > 0).forEach(c => {
-    const tope = Number(c.presupuesto);
-    const gastado = gastosPorCat[c.categoria] || 0;
-    totalTopeGlobal += tope; totalGastadoGlobal += gastado;
-    const porc = tope > 0 ? (gastado / tope) * 100 : 0;
-    const color = porc > 100 ? 'bg-rose-500' : (porc > 75 ? 'bg-amber-500' : 'bg-sky-500');
-    
-    if(panelPres) {
+  if(panelPres) {
+    panelPres.innerHTML = '';
+    cacheDatos.configuracion.filter(c => (c.tipo === 'Gasto' || c.tipo === 'gasto') && Number(c.presupuesto) > 0).forEach(c => {
+      const tope = Number(c.presupuesto);
+      const gastado = gastosPorCat[c.categoria] || 0;
+      totalTopeGlobal += tope; totalGastadoGlobal += gastado;
+      const porc = tope > 0 ? (gastado / tope) * 100 : 0;
+      const color = porc > 100 ? 'bg-rose-500' : (porc > 75 ? 'bg-amber-500' : 'bg-sky-500');
+      
       panelPres.innerHTML += `<div>
         <div class="flex justify-between items-end mb-1"><span class="text-xs font-semibold text-slate-600">${esc(c.categoria)}</span><span class="text-[10px] text-slate-400">${S(gastado)} / ${S(tope)}</span></div>
         <div class="w-full bg-slate-100 rounded-full h-1"><div class="${color} h-1 rounded-full" style="width:${Math.min(porc, 100)}%"></div></div>
       </div>`;
-    }
-  });
+    });
+  }
 
-  document.getElementById('totalPresupuestos').innerText = S(totalGastadoGlobal) + ' / ' + S(totalTopeGlobal);
+  if(document.getElementById('totalPresupuestos')) document.getElementById('totalPresupuestos').innerText = S(totalGastadoGlobal) + ' / ' + S(totalTopeGlobal);
   const barraPres = document.getElementById('barraTotalPresupuestos');
   const porcGlobal = totalTopeGlobal > 0 ? (totalGastadoGlobal / totalTopeGlobal) * 100 : 0;
   if(barraPres) barraPres.style.width = Math.min(porcGlobal, 100) + '%';
@@ -352,7 +361,7 @@ function procesarYRenderizarDashboard() {
   renderFondos();
 }
 
-// NUEVO: Lógica de Fondos y Autopago
+// Fondos y Autopago
 function renderFondos() {
   const deudasView = document.getElementById('viewDeudas');
   if(!deudasView) return;
@@ -380,7 +389,6 @@ function renderFondos() {
       const cuotas = datosObj.data || [];
       const tablaBd = datosObj.tabla;
       
-      // 1. Calcular fondo abonado históricamente
       let fondoTotal = 0;
       cacheDatos.gastos.forEach(g => {
           const catStr = (g.categoria || '').toLowerCase().replace(/[^a-z]/g, '');
@@ -389,7 +397,6 @@ function renderFondos() {
           }
       });
 
-      // 2. Separar lo ya gastado del fondo vs. Cuotas pagadas externas vs. Pendientes
       let fondoUsado = 0;
       let cuotasPendientes = [];
       
@@ -398,46 +405,36 @@ function renderFondos() {
           const montoCuota = Number(c.monto || c.cuota) || 0;
           
           if (pag === 'fondo') {
-              fondoUsado += montoCuota; // Restamos porque el sistema ya lo autopagó antes
+              fondoUsado += montoCuota; 
           } else if (pag !== 'pagado' && pag !== 'si' && pag !== 'sí' && pag !== 'true' && pag !== '1' && c.pagado !== true) {
-              // Si no dice pagado, está pendiente
               cuotasPendientes.push(c);
           }
       });
 
       let fondoDisponible = Math.max(0, fondoTotal - fondoUsado);
 
-      // 3. Ordenar cuotas pendientes por fecha (la más vieja primero)
       cuotasPendientes.sort((a, b) => {
           const fA = a.vencimiento || a.fechavencimiento || a.fecha || '9999-12-31';
           const fB = b.vencimiento || b.fechavencimiento || b.fecha || '9999-12-31';
           return fA > fB ? 1 : -1;
       });
 
-      // 4. MOTOR DE AUTOPAGO
+      // Motor de Autopago
       for (let c of cuotasPendientes) {
           const fVenc = c.vencimiento || c.fechavencimiento || c.fecha || '';
           const montoCuota = Number(c.monto || c.cuota) || 0;
 
-          // Si ya venció o vence hoy, y la plata alcanza
           if (fVenc && fVenc <= hoyIso && fondoDisponible >= montoCuota && montoCuota > 0) {
-              // Actualizar en Supabase de forma asíncrona ("Fondo" indica que se pagó automáticamente)
               if (tablaBd) {
-                  supabase.from(tablaBd).update({ pagado: 'Fondo' }).eq('id', c.id).then(r => {
-                      if(!r.error) console.log(`Autopago exitoso: ${cred.titulo} - Monto: ${montoCuota}`);
-                  }).catch(() => {});
+                  supabase.from(tablaBd).update({ pagado: 'Fondo' }).eq('id', c.id).catch(() => {});
               }
-              
-              // Ajustamos la matemática local
               fondoDisponible -= montoCuota;
               c.pagado = 'Fondo'; 
           }
       }
 
-      // 5. Filtramos las que se acaban de autopagar para dejar solo las REALMENTE pendientes
       cuotasPendientes = cuotasPendientes.filter(c => c.pagado !== 'Fondo');
 
-      // 6. Preparar UI
       const prox = cuotasPendientes[0];
       const proxMonto = prox ? S(Number(prox.monto || prox.cuota) || 0) : 'S/ 0.00';
       const proxFecha = prox ? (prox.vencimiento || prox.fechavencimiento || prox.fecha || 'Sin fecha') : 'Sin cuotas';
@@ -465,50 +462,110 @@ function renderFondos() {
   contenedor.innerHTML = html;
 }
 
+// ---------------------------------------------------------------------------------
+// NUEVAS FUNCIONES SÚPER-SEGURAS PARA REGISTRAR Y EDITAR (A prueba de errores HTML/BD)
+// ---------------------------------------------------------------------------------
+
 window.enviarGasto = async function(e) {
   e.preventDefault();
   const btn = document.getElementById('btnGuardarGasto');
-  btn.innerText = 'Registrando...'; btn.disabled = true;
+  if(btn) { btn.innerText = 'Registrando...'; btn.disabled = true; }
 
-  const { error } = await supabase.from('gastos').insert([{
-    fecha: document.getElementById('fechaGasto').value,
-    categoria: document.getElementById('categoriaGasto').value,
-    descripcion: document.getElementById('descripcionGasto').value || null,
-    monto: parseFloat(document.getElementById('montoGasto').value),
-    responsable: document.getElementById('responsableGasto').value,
-    metodo_de_pago: 'App Web'
-  }]);
+  try {
+    const elFecha = document.getElementById('fechaGasto');
+    const elCat = document.getElementById('categoriaGasto');
+    const elMonto = document.getElementById('montoGasto');
+    const elResp = document.getElementById('responsableGasto');
+    const elDetalle = document.getElementById('descripcionGasto') || document.getElementById('comentarioGasto');
 
-  btn.innerText = 'Registrar salida'; btn.disabled = false;
-  if (error) { toast('Error: ' + error.message, false); }
-  else {
-    document.getElementById('formGasto').reset();
-    document.getElementById('fechaGasto').valueAsDate = new Date();
+    const payload = {
+      fecha: elFecha ? elFecha.value : iso(new Date()),
+      categoria: elCat ? elCat.value : 'Gasto',
+      monto: parseFloat(elMonto ? elMonto.value : 0),
+      metodo_de_pago: 'App Web'
+    };
+
+    if(elResp) payload.responsable = elResp.value;
+    if(elDetalle) payload.descripcion = elDetalle.value || null; // Intentamos con descripcion primero
+
+    const { error } = await supabase.from('gastos').insert([payload]);
+
+    if (error) {
+       // Si Supabase se queja de la columna descripcion, intentamos con comentario
+       if(error.message.includes("descripcion")) {
+           delete payload.descripcion;
+           if(elDetalle) payload.comentario = elDetalle.value || null;
+           const retry = await supabase.from('gastos').insert([payload]);
+           if(retry.error) throw retry.error;
+       } else {
+           throw error;
+       }
+    }
+    
+    if(btn) { btn.innerText = 'Registrar salida'; btn.disabled = false; }
+    const form = document.getElementById('formGasto');
+    if(form) form.reset();
+    if(elFecha) elFecha.valueAsDate = new Date();
     toast('Gasto registrado con éxito', true);
     cargarDashboard();
+
+  } catch(err) {
+    if(btn) { btn.innerText = 'Registrar salida'; btn.disabled = false; }
+    toast('Error: ' + err.message, false);
   }
 }
 
 window.enviarIngreso = async function(e) {
   e.preventDefault();
   const btn = document.getElementById('btnGuardarIngreso');
-  btn.innerText = 'Registrando...'; btn.disabled = true;
+  if(btn) { btn.innerText = 'Registrando...'; btn.disabled = true; }
 
-  const { error } = await supabase.from('ingresos').insert([{
-    fecha: document.getElementById('fechaIngreso').value,
-    responsable: document.getElementById('responsableIngreso').value,
-    categoria: document.getElementById('categoriaIngreso').value,
-    comentario: document.getElementById('comentarioIngreso').value || null,
-    monto: parseFloat(document.getElementById('montoIngreso').value)
-  }]);
+  try {
+    const elFecha = document.getElementById('fechaIngreso');
+    const elCat = document.getElementById('categoriaIngreso');
+    const elMonto = document.getElementById('montoIngreso');
+    const elResp = document.getElementById('responsableIngreso');
+    const elDetalle = document.getElementById('comentarioIngreso') || document.getElementById('descripcionIngreso');
 
-  btn.innerText = 'Registrar entrada'; btn.disabled = false;
-  if (error) { toast('Error: ' + error.message, false); }
-  else {
-    document.getElementById('formIngreso').reset();
-    document.getElementById('fechaIngreso').valueAsDate = new Date();
+    const payload = {
+      fecha: elFecha ? elFecha.value : iso(new Date()),
+      categoria: elCat ? elCat.value : 'Ingreso',
+      monto: parseFloat(elMonto ? elMonto.value : 0)
+    };
+
+    if(elResp && elResp.value) payload.responsable = elResp.value;
+    if(elDetalle) payload.comentario = elDetalle.value || null; // Intentamos con comentario primero
+
+    const { error } = await supabase.from('ingresos').insert([payload]);
+
+    if (error) {
+       // Si Supabase rechaza 'comentario', intentamos con 'descripcion'
+       if(error.message.includes("comentario")) {
+           delete payload.comentario;
+           if(elDetalle) payload.descripcion = elDetalle.value || null;
+           const retry1 = await supabase.from('ingresos').insert([payload]);
+           if(retry1.error) throw retry1.error;
+       } 
+       // Si Supabase rechaza 'responsable'
+       else if(error.message.includes("responsable")) {
+           delete payload.responsable;
+           const retry2 = await supabase.from('ingresos').insert([payload]);
+           if(retry2.error) throw retry2.error;
+       } else {
+           throw error;
+       }
+    }
+    
+    if(btn) { btn.innerText = 'Registrar entrada'; btn.disabled = false; }
+    const form = document.getElementById('formIngreso');
+    if(form) form.reset();
+    if(elFecha) elFecha.valueAsDate = new Date();
     toast('Ingreso registrado con éxito', true);
     cargarDashboard();
+
+  } catch(err) {
+    if(btn) { btn.innerText = 'Registrar entrada'; btn.disabled = false; }
+    toast('Error: ' + err.message, false);
   }
 }
 
@@ -525,54 +582,73 @@ window.editarMov = function(id, tipo) {
   const item = lista.find(x => x.id === id);
   if (!item) return;
 
-  document.getElementById('editMovId').value = item.id;
-  document.getElementById('editMovTipo').value = tipo;
-  document.getElementById('editMovMonto').value = item.monto;
-  document.getElementById('editMovFecha').value = item.fecha ? item.fecha.substring(0, 10) : '';
-  document.getElementById('editMovResponsable').value = item.responsable || 'Jhonathan';
-  document.getElementById('editMovDetalle').value = item.descripcion || item.comentario || '';
+  const getE = i => document.getElementById(i);
+  if(getE('editMovId')) getE('editMovId').value = item.id;
+  if(getE('editMovTipo')) getE('editMovTipo').value = tipo;
+  if(getE('editMovMonto')) getE('editMovMonto').value = item.monto;
+  if(getE('editMovFecha')) getE('editMovFecha').value = item.fecha ? item.fecha.substring(0, 10) : '';
+  if(getE('editMovResponsable')) getE('editMovResponsable').value = item.responsable || 'Jhonathan';
+  if(getE('editMovDetalle')) getE('editMovDetalle').value = item.descripcion || item.comentario || '';
 
-  const selCat = document.getElementById('editMovCategoria');
-  selCat.innerHTML = document.getElementById(tipo === 'Gasto' ? 'categoriaGasto' : 'categoriaIngreso').innerHTML;
-  selCat.value = item.categoria;
+  const selCat = getE('editMovCategoria');
+  if(selCat) {
+      selCat.innerHTML = getE(tipo === 'Gasto' ? 'categoriaGasto' : 'categoriaIngreso').innerHTML;
+      selCat.value = item.categoria;
+  }
 
-  document.getElementById('modalEdicionMovimiento').classList.remove('hidden');
-  document.getElementById('modalEdicionMovimiento').classList.add('flex');
+  const modal = getE('modalEdicionMovimiento');
+  if(modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
 }
 
 window.cerrarModalEdicion = function() {
-  document.getElementById('modalEdicionMovimiento').classList.add('hidden');
-  document.getElementById('modalEdicionMovimiento').classList.remove('flex');
+  const modal = document.getElementById('modalEdicionMovimiento');
+  if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
 }
 
 window.enviarEdicionMovimiento = async function(e) {
   e.preventDefault();
-  const id = document.getElementById('editMovId').value;
-  const tipo = document.getElementById('editMovTipo').value;
-  const tabla = tipo === 'Gasto' ? 'gastos' : 'ingresos';
+  try {
+      const getE = i => document.getElementById(i);
+      const id = getE('editMovId') ? getE('editMovId').value : null;
+      const tipo = getE('editMovTipo') ? getE('editMovTipo').value : 'Gasto';
+      const tabla = tipo === 'Gasto' ? 'gastos' : 'ingresos';
 
-  const payload = tipo === 'Gasto' ? {
-    monto: parseFloat(document.getElementById('editMovMonto').value),
-    fecha: document.getElementById('editMovFecha').value,
-    responsable: document.getElementById('editMovResponsable').value,
-    categoria: document.getElementById('editMovCategoria').value,
-    descripcion: document.getElementById('editMovDetalle').value
-  } : {
-    monto: parseFloat(document.getElementById('editMovMonto').value),
-    fecha: document.getElementById('editMovFecha').value,
-    responsable: document.getElementById('editMovResponsable').value,
-    categoria: document.getElementById('editMovCategoria').value,
-    comentario: document.getElementById('editMovDetalle').value
-  };
+      const payload = {
+        monto: parseFloat(getE('editMovMonto') ? getE('editMovMonto').value : 0),
+        fecha: getE('editMovFecha') ? getE('editMovFecha').value : null,
+        categoria: getE('editMovCategoria') ? getE('editMovCategoria').value : null
+      };
 
-  const { error } = await supabase.from(tabla).update(payload).eq('id', id);
-  if (error) toast('Error al actualizar: ' + error.message, false);
-  else {
-    toast('Actualizado correctamente', true);
-    cerrarModalEdicion();
-    cargarDashboard();
+      if(getE('editMovResponsable')) payload.responsable = getE('editMovResponsable').value;
+      
+      const det = getE('editMovDetalle');
+      if(det) {
+          if (tipo === 'Gasto') payload.descripcion = det.value;
+          else payload.comentario = det.value;
+      }
+
+      const { error } = await supabase.from(tabla).update(payload).eq('id', id);
+      
+      if (error) {
+          if (tipo === 'Ingreso' && error.message.includes('comentario')) {
+              delete payload.comentario;
+              payload.descripcion = det ? det.value : null;
+              const retry = await supabase.from(tabla).update(payload).eq('id', id);
+              if (retry.error) throw retry.error;
+          } else {
+              throw error;
+          }
+      }
+      
+      toast('Actualizado correctamente', true);
+      cerrarModalEdicion();
+      cargarDashboard();
+  } catch (err) {
+      toast('Error al actualizar: ' + err.message, false);
   }
 }
+
+// ---------------------------------------------------------------------------------
 
 window.cargarPlanDeudas = async function() {
   const deudas = cacheDatos.deudas;
@@ -587,10 +663,10 @@ window.cargarPlanDeudas = async function() {
   const totalMinimos = deudas.reduce((s, d) => s + (Number(d.pago_minimo || d.minimo) || 0), 0);
   const interesMensual = deudas.reduce((s, d) => s + (Number(d.saldo_actual || d.saldo) * ((Number(d.tasa_anual || d.tasa) / 100) / 12)), 0);
 
-  document.getElementById('dTotal').innerText = S(totalSaldo);
-  document.getElementById('dMinimos').innerText = S(totalMinimos);
-  document.getElementById('dInteres').innerText = S(interesMensual);
-  document.getElementById('dExcedente').innerText = S(0);
+  if(document.getElementById('dTotal')) document.getElementById('dTotal').innerText = S(totalSaldo);
+  if(document.getElementById('dMinimos')) document.getElementById('dMinimos').innerText = S(totalMinimos);
+  if(document.getElementById('dInteres')) document.getElementById('dInteres').innerText = S(interesMensual);
+  if(document.getElementById('dExcedente')) document.getElementById('dExcedente').innerText = S(0);
 
   const lista = document.getElementById('listaDeudas');
   if(lista) {
@@ -611,20 +687,21 @@ window.cargarPlanDeudas = async function() {
 
 window.guardarDeuda = async function(e) {
   e.preventDefault();
+  const getE = i => document.getElementById(i);
   const payload = {
-    nombre: document.getElementById('deudaNombre').value,
-    saldo_actual: parseFloat(document.getElementById('deudaSaldo').value),
-    tasa_anual: parseFloat(document.getElementById('deudaTasa').value) || 0,
-    pago_minimo: parseFloat(document.getElementById('deudaMinimo').value),
-    dia_pago: parseInt(document.getElementById('deudaDia').value) || 15,
-    categoria_gasto: document.getElementById('deudaCategoria').value || null,
-    saldo_inicial: parseFloat(document.getElementById('deudaSaldo').value)
+    nombre: getE('deudaNombre') ? getE('deudaNombre').value : 'Nueva Deuda',
+    saldo_actual: parseFloat(getE('deudaSaldo') ? getE('deudaSaldo').value : 0),
+    tasa_anual: parseFloat(getE('deudaTasa') ? getE('deudaTasa').value : 0) || 0,
+    pago_minimo: parseFloat(getE('deudaMinimo') ? getE('deudaMinimo').value : 0),
+    dia_pago: parseInt(getE('deudaDia') ? getE('deudaDia').value : 15) || 15,
+    categoria_gasto: getE('deudaCategoria') ? getE('deudaCategoria').value : null,
+    saldo_inicial: parseFloat(getE('deudaSaldo') ? getE('deudaSaldo').value : 0)
   };
 
   const { error } = await supabase.from('deudas').insert([payload]);
   if (error) toast('Error al guardar deuda: ' + error.message, false);
   else {
-    document.getElementById('formDeuda').reset();
+    if(getE('formDeuda')) getE('formDeuda').reset();
     toast('Deuda guardada', true);
     cargarDashboard();
   }
@@ -657,26 +734,29 @@ function renderConfiguracion() {
 
 window.guardarCategoria = async function(e) {
   e.preventDefault();
+  const getE = i => document.getElementById(i);
   const payload = {
-    tipo: document.getElementById('confTipo').value,
-    grupo: document.getElementById('confGrupo').value || null,
-    categoria: document.getElementById('confCategoria').value,
-    presupuesto: parseFloat(document.getElementById('confPresupuesto').value) || 0
+    tipo: getE('confTipo') ? getE('confTipo').value : 'Gasto',
+    grupo: getE('confGrupo') ? getE('confGrupo').value : null,
+    categoria: getE('confCategoria') ? getE('confCategoria').value : 'Nueva',
+    presupuesto: parseFloat(getE('confPresupuesto') ? getE('confPresupuesto').value : 0) || 0
   };
 
   const { error } = await supabase.from('configuracion').insert([payload]);
   if(error) toast('Error: ' + error.message, false);
   else {
-    document.getElementById('formCategoria').reset();
+    if(getE('formCategoria')) getE('formCategoria').reset();
     toast('Categoría guardada', true);
     cargarDashboard();
   }
 }
 
 window.togglePorTipo = function() {
-  const esIngreso = document.getElementById('confTipo').value === 'Ingreso';
-  document.getElementById('divConfGrupo').style.display = esIngreso ? 'none' : 'block';
-  document.getElementById('divConfPresupuesto').style.display = esIngreso ? 'none' : 'block';
+  const confTipo = document.getElementById('confTipo');
+  if(!confTipo) return;
+  const esIngreso = confTipo.value === 'Ingreso';
+  if(document.getElementById('divConfGrupo')) document.getElementById('divConfGrupo').style.display = esIngreso ? 'none' : 'block';
+  if(document.getElementById('divConfPresupuesto')) document.getElementById('divConfPresupuesto').style.display = esIngreso ? 'none' : 'block';
 }
 
 cargarDashboard();
