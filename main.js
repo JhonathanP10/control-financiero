@@ -428,13 +428,14 @@ function renderFondos() {
           return fA > fB ? 1 : -1;
       });
 
+      // Motor de Autopago seguro sin llamadas inválidas
       for (let c of cuotasPendientes) {
           const fVenc = c.proximo_vencimiento || c.vencimiento || c.fecha || '';
           const montoCuota = Number(c.monto || c.cuota || 0);
 
           if (fVenc && fVenc <= hoyIso && fondoDisponible >= montoCuota && montoCuota > 0) {
               if (tablaBd) {
-                  supabase.from(tablaBd).update({ pagado: 'Fondo' }).eq('id', c.id).catch(() => {});
+                  supabase.from(tablaBd).update({ pagado: 'Fondo' }).eq('id', c.id).then();
               }
               fondoDisponible -= montoCuota;
               c.pagado = 'Fondo'; 
@@ -716,7 +717,7 @@ window.guardarCategoria = async function(e) {
     presupuesto: parseFloat(getE('confPresupuesto')?.value || 0) || 0
   };
 
-  const { error } = await supabase.path ? null : supabase.from('configuracion').insert([payload]);
+  const { error } = await supabase.from('configuracion').insert([payload]);
   if(error) toast('Error: ' + error.message, false);
   else {
     document.getElementById('formCategoria')?.reset();
