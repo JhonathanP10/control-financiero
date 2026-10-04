@@ -458,7 +458,7 @@ function procesarYRenderizarDashboard() {
   let ingresosPeriodo = 0, gastosPeriodo = 0;
   let gastosPorCat = {}, gastosPorGrupo = {};
   let ingresosPorResp = { 'Jhonathan': 0, 'Sindy': 0 };
-  let detalleIngresosPeriodo = [];
+  let ingresosPorCategoria = {};
   let movimientos = [];
 
   cacheDatos.ingresos.forEach(i => {
@@ -471,7 +471,12 @@ function procesarYRenderizarDashboard() {
     if (fStr >= fDesdeStr && fStr <= fHastaStr) {
       ingresosPeriodo += m;
       if(ingresosPorResp[resp] !== undefined) ingresosPorResp[resp] += m;
-      detalleIngresosPeriodo.push({ categoria: cat, monto: m, responsable: resp, comentario: comentario });
+      
+      if (!ingresosPorCategoria[cat]) {
+        ingresosPorCategoria[cat] = { total: 0, items: [] };
+      }
+      ingresosPorCategoria[cat].total += m;
+      ingresosPorCategoria[cat].items.push({ monto: m, responsable: resp, comentario: comentario });
     }
     movimientos.push({ id: i.id, tipo: 'Ingreso', fecha: i.fecha, categoria: i.categoria, monto: m, responsable: resp, detalle: comentario });
   });
@@ -495,47 +500,62 @@ function procesarYRenderizarDashboard() {
   if(document.getElementById('periodoJhoIn')) document.getElementById('periodoJhoIn').innerText = 'Jho: ' + S(ingresosPorResp['Jhonathan'] || 0);
   if(document.getElementById('periodoSinIn')) document.getElementById('periodoSinIn').innerText = 'Sin: ' + S(ingresosPorResp['Sindy'] || 0);
 
-  // 3. ENCONTRAR E INYECTAR EL DESPLEGABLE EN LA TARJETA DE INGRESOS PERIODO
-  // Buscamos la tarjeta analizando su texto o estructura
-  const todasLasTarjetas = Array.from(document.querySelectorAll('.bg-white, div'));
-  const cardIngPer = todasLasTarjetas.find(el => el.querySelector && el.querySelector('#periodoIngresos'));
-
-  if (cardIngPer) {
-      let dropdownIng = document.getElementById('dropdownIngresosPeriodo');
-      if (!dropdownIng) {
-          dropdownIng = document.createElement('details');
-          dropdownIng.id = 'dropdownIngresosPeriodo';
-          dropdownIng.className = 'group mt-3 pt-2 border-t border-slate-100 text-[11px]';
-          cardIngPer.appendChild(dropdownIng);
-      }
-
-      let htmlDesplegable = `
-        <summary class="font-bold text-slate-600 cursor-pointer flex justify-between items-center select-none py-1 hover:text-sky-600 transition-colors">
-          <span><i class="fa-solid fa-list-ul mr-1 text-emerald-500"></i> Desglose por Categoría</span>
-          <i class="fa-solid fa-chevron-down text-[9px] group-open:rotate-180 transition-transform"></i>
-        </summary>
-        <div class="mt-2 space-y-2 max-h-40 overflow-y-auto pr-1">`;
-
-      if (detalleIngresosPeriodo.length === 0) {
-          htmlDesplegable += `<p class="text-[10px] text-slate-400 py-1">Sin ingresos en este periodo.</p>`;
+  // 3. RENDERIZAR NUEVA TARJETA: INGRESOS POR CATEGORÍA
+  const dashView = document.getElementById('viewDash');
+  if (dashView) {
+    let tarjetaIngCat = document.getElementById('cardIngresosPorCategoria');
+    if (!tarjetaIngCat) {
+      tarjetaIngCat = document.createElement('div');
+      tarjetaIngCat.id = 'cardIngresosPorCategoria';
+      tarjetaIngCat.className = 'bg-white rounded-3xl border border-slate-200/80 p-4 shadow-sm mb-4 w-full';
+      
+      // Intentamos ubicarla debajo del resumen de ingresos/periodo o antes del panel de presupuestos
+      const panelPres = document.getElementById('panelPresupuestos')?.closest('.bg-white') || document.getElementById('panelPresupuestos');
+      if (panelPres) {
+        dashView.insertBefore(tarjetaIngCat, panelPres);
       } else {
-          detalleIngresosPeriodo.forEach(ing => {
-              htmlDesplegable += `
-                <div class="bg-slate-50 p-2 rounded-xl border border-slate-100">
-                  <div class="flex justify-between items-center font-bold text-slate-800">
-                    <span>${esc(ing.categoria)}</span>
-                    <span class="text-emerald-600">+${S(ing.monto)}</span>
-                  </div>
-                  <div class="flex justify-between items-center text-[9px] text-slate-400 mt-0.5">
-                    <span><i class="fa-solid fa-user mr-0.5 text-sky-500"></i>${esc(ing.responsable)}</span>
-                    ${ing.comentario ? `<span class="truncate max-w-[120px] italic">"${esc(ing.comentario)}"</span>` : ''}
-                  </div>
-                </div>`;
-          });
+        dashView.appendChild(tarjetaIngCat);
       }
+    }
 
-      htmlDesplegable += `</div>`;
-      dropdownIng.innerHTML = htmlDesplegable;
+    let htmlIngCat = `
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider"><i class="fa-solid fa-chart-pie mr-1 text-emerald-500"></i> Ingresos por Categoría</h3>
+        <span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">${filtro.etiqueta}</span>
+      </div>
+      <div class="space-y-3">`;
+
+    const catsArr = Object.keys(ingresosPorCategoria).map(c => ({ categoria: c, ...ingresosPorCategoria[c] })).sort((a,b) => b.total - a.total);
+
+    if (catsArr.length === 0) {
+      htmlIngCat += `<p class="text-[11px] text-slate-400 py-2 text-center">No hay ingresos registrados en este periodo.</p>`;
+    } else {
+      catsArr.forEach(item => {
+        htmlIngCat += `
+          <div class="bg-slate-50/70 p-3 rounded-2xl border border-slate-100">
+            <div class="flex justify-between items-center mb-1.5">
+              <span class="text-xs font-bold text-slate-800">${esc(item.categoria)}</span>
+              <span class="text-xs font-bold text-emerald-600">${S(item.total)}</span>
+            </div>
+            <div class="space-y-1 mt-2 pt-2 border-t border-slate-200/60">`;
+        
+        item.items.forEach(sub => {
+          htmlIngCat += `
+            <div class="flex justify-between items-center text-[11px]">
+              <span class="text-slate-600 flex items-center gap-1 font-medium">
+                <i class="fa-solid fa-user text-[9px] text-sky-500"></i> ${esc(sub.responsable)} 
+                ${sub.comentario ? `<span class="text-slate-400 italic">(${esc(sub.comentario)})</span>` : ''}
+              </span>
+              <span class="font-semibold text-slate-700">${S(sub.monto)}</span>
+            </div>`;
+        });
+
+        htmlIngCat += `</div></div>`;
+      });
+    }
+
+    htmlIngCat += `</div>`;
+    tarjetaIngCat.innerHTML = htmlIngCat;
   }
 
   const resPer = ingresosPeriodo - gastosPeriodo;
