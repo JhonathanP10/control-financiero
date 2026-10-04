@@ -385,7 +385,7 @@ function renderHeaderUsuario() {
     </button>`;
 }
 
-/* RENDERIZADO ÚNICO Y ACTUALIZACIÓN DE DATOS (SIN DUPLICAR ELEMENTOS) */
+/* RENDERIZADO ÚNICO Y ACTUALIZACIÓN DE DATOS */
 function procesarYRenderizarDashboard() {
   const filtro = calcularRango();
   const etiq = document.getElementById('etiquetaPeriodo');
@@ -457,7 +457,6 @@ function procesarYRenderizarDashboard() {
 
   let ingresosPeriodo = 0, gastosPeriodo = 0;
   let gastosPorCat = {}, gastosPorGrupo = {};
-  let ingresosPorRespCat = { 'Jhonathan': {}, 'Sindy': {} };
   let ingresosPorResp = { 'Jhonathan': 0, 'Sindy': 0 };
   let detalleIngresosPeriodo = [];
   let movimientos = [];
@@ -472,8 +471,6 @@ function procesarYRenderizarDashboard() {
     if (fStr >= fDesdeStr && fStr <= fHastaStr) {
       ingresosPeriodo += m;
       if(ingresosPorResp[resp] !== undefined) ingresosPorResp[resp] += m;
-      const targetUser = ingresosPorRespCat[resp] ? resp : 'Jhonathan';
-      ingresosPorRespCat[targetUser][cat] = (ingresosPorRespCat[targetUser][cat] || 0) + m;
       detalleIngresosPeriodo.push({ categoria: cat, monto: m, responsable: resp, comentario: comentario });
     }
     movimientos.push({ id: i.id, tipo: 'Ingreso', fecha: i.fecha, categoria: i.categoria, monto: m, responsable: resp, detalle: comentario });
@@ -498,8 +495,11 @@ function procesarYRenderizarDashboard() {
   if(document.getElementById('periodoJhoIn')) document.getElementById('periodoJhoIn').innerText = 'Jho: ' + S(ingresosPorResp['Jhonathan'] || 0);
   if(document.getElementById('periodoSinIn')) document.getElementById('periodoSinIn').innerText = 'Sin: ' + S(ingresosPorResp['Sindy'] || 0);
 
-  // 3. AGREGAR MÓDULO DESPLEGABLE DE INGRESOS POR CATEGORÍA DENTRO DE INGRESOS PERIODO
-  const cardIngPer = document.getElementById('cardIngresosPeriodo');
+  // 3. ENCONTRAR E INYECTAR EL DESPLEGABLE EN LA TARJETA DE INGRESOS PERIODO
+  // Buscamos la tarjeta analizando su texto o estructura
+  const todasLasTarjetas = Array.from(document.querySelectorAll('.bg-white, div'));
+  const cardIngPer = todasLasTarjetas.find(el => el.querySelector && el.querySelector('#periodoIngresos'));
+
   if (cardIngPer) {
       let dropdownIng = document.getElementById('dropdownIngresosPeriodo');
       if (!dropdownIng) {
@@ -514,7 +514,7 @@ function procesarYRenderizarDashboard() {
           <span><i class="fa-solid fa-list-ul mr-1 text-emerald-500"></i> Desglose por Categoría</span>
           <i class="fa-solid fa-chevron-down text-[9px] group-open:rotate-180 transition-transform"></i>
         </summary>
-        <div class="mt-2 space-y-2 max-h-40 overflow-y-auto pr-1 scroll-fino">`;
+        <div class="mt-2 space-y-2 max-h-40 overflow-y-auto pr-1">`;
 
       if (detalleIngresosPeriodo.length === 0) {
           htmlDesplegable += `<p class="text-[10px] text-slate-400 py-1">Sin ingresos en este periodo.</p>`;
@@ -527,7 +527,7 @@ function procesarYRenderizarDashboard() {
                     <span class="text-emerald-600">+${S(ing.monto)}</span>
                   </div>
                   <div class="flex justify-between items-center text-[9px] text-slate-400 mt-0.5">
-                    <span><i class="fa-solid fa-user mr-0.5"></i>${esc(ing.responsable)}</span>
+                    <span><i class="fa-solid fa-user mr-0.5 text-sky-500"></i>${esc(ing.responsable)}</span>
                     ${ing.comentario ? `<span class="truncate max-w-[120px] italic">"${esc(ing.comentario)}"</span>` : ''}
                   </div>
                 </div>`;
