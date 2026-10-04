@@ -459,6 +459,7 @@ function procesarYRenderizarDashboard() {
   let gastosPorCat = {}, gastosPorGrupo = {};
   let ingresosPorRespCat = { 'Jhonathan': {}, 'Sindy': {} };
   let ingresosPorResp = { 'Jhonathan': 0, 'Sindy': 0 };
+  let detalleIngresosPeriodo = [];
   let movimientos = [];
 
   cacheDatos.ingresos.forEach(i => {
@@ -466,14 +467,16 @@ function procesarYRenderizarDashboard() {
     const m = Number(i.monto) || 0;
     const resp = i.responsable || 'Jhonathan';
     const cat = i.categoria || 'Otros';
+    const comentario = i.comentario || i.descripcion || '';
     
     if (fStr >= fDesdeStr && fStr <= fHastaStr) {
       ingresosPeriodo += m;
       if(ingresosPorResp[resp] !== undefined) ingresosPorResp[resp] += m;
       const targetUser = ingresosPorRespCat[resp] ? resp : 'Jhonathan';
       ingresosPorRespCat[targetUser][cat] = (ingresosPorRespCat[targetUser][cat] || 0) + m;
+      detalleIngresosPeriodo.push({ categoria: cat, monto: m, responsable: resp, comentario: comentario });
     }
-    movimientos.push({ id: i.id, tipo: 'Ingreso', fecha: i.fecha, categoria: i.categoria, monto: m, responsable: resp, detalle: i.comentario || i.descripcion || '' });
+    movimientos.push({ id: i.id, tipo: 'Ingreso', fecha: i.fecha, categoria: i.categoria, monto: m, responsable: resp, detalle: comentario });
   });
 
   cacheDatos.gastos.forEach(g => {
@@ -495,39 +498,51 @@ function procesarYRenderizarDashboard() {
   if(document.getElementById('periodoJhoIn')) document.getElementById('periodoJhoIn').innerText = 'Jho: ' + S(ingresosPorResp['Jhonathan'] || 0);
   if(document.getElementById('periodoSinIn')) document.getElementById('periodoSinIn').innerText = 'Sin: ' + S(ingresosPorResp['Sindy'] || 0);
 
+  // 3. AGREGAR MÓDULO DESPLEGABLE DE INGRESOS POR CATEGORÍA DENTRO DE INGRESOS PERIODO
+  const cardIngPer = document.getElementById('cardIngresosPeriodo');
+  if (cardIngPer) {
+      let dropdownIng = document.getElementById('dropdownIngresosPeriodo');
+      if (!dropdownIng) {
+          dropdownIng = document.createElement('details');
+          dropdownIng.id = 'dropdownIngresosPeriodo';
+          dropdownIng.className = 'group mt-3 pt-2 border-t border-slate-100 text-[11px]';
+          cardIngPer.appendChild(dropdownIng);
+      }
+
+      let htmlDesplegable = `
+        <summary class="font-bold text-slate-600 cursor-pointer flex justify-between items-center select-none py-1 hover:text-sky-600 transition-colors">
+          <span><i class="fa-solid fa-list-ul mr-1 text-emerald-500"></i> Desglose por Categoría</span>
+          <i class="fa-solid fa-chevron-down text-[9px] group-open:rotate-180 transition-transform"></i>
+        </summary>
+        <div class="mt-2 space-y-2 max-h-40 overflow-y-auto pr-1 scroll-fino">`;
+
+      if (detalleIngresosPeriodo.length === 0) {
+          htmlDesplegable += `<p class="text-[10px] text-slate-400 py-1">Sin ingresos en este periodo.</p>`;
+      } else {
+          detalleIngresosPeriodo.forEach(ing => {
+              htmlDesplegable += `
+                <div class="bg-slate-50 p-2 rounded-xl border border-slate-100">
+                  <div class="flex justify-between items-center font-bold text-slate-800">
+                    <span>${esc(ing.categoria)}</span>
+                    <span class="text-emerald-600">+${S(ing.monto)}</span>
+                  </div>
+                  <div class="flex justify-between items-center text-[9px] text-slate-400 mt-0.5">
+                    <span><i class="fa-solid fa-user mr-0.5"></i>${esc(ing.responsable)}</span>
+                    ${ing.comentario ? `<span class="truncate max-w-[120px] italic">"${esc(ing.comentario)}"</span>` : ''}
+                  </div>
+                </div>`;
+          });
+      }
+
+      htmlDesplegable += `</div>`;
+      dropdownIng.innerHTML = htmlDesplegable;
+  }
+
   const resPer = ingresosPeriodo - gastosPeriodo;
   const elRes = document.getElementById('periodoResultado');
   if(elRes) {
     elRes.innerText = (resPer >= 0 ? 'Te quedan ' : 'Vas sobre-gastado ') + S(Math.abs(resPer));
     elRes.className = 'text-[10px] mt-1 font-bold ' + (resPer >= 0 ? 'text-emerald-600' : 'text-rose-600');
-  }
-
-  // Llenar panel de ingresos por categoría
-  const panelIngCat = document.getElementById('panelIngresosCat');
-  if (panelIngCat) {
-      panelIngCat.innerHTML = '';
-      ['Jhonathan', 'Sindy'].forEach(resp => {
-          const catsUser = ingresosPorRespCat[resp] || {};
-          const arrIngUser = Object.keys(catsUser).map(c => ({ cat: c, monto: catsUser[c] })).sort((a,b) => b.monto - a.monto);
-
-          if(arrIngUser.length > 0) {
-              panelIngCat.innerHTML += `<div class="mb-0.5"><p class="text-[9px] font-bold text-slate-500 uppercase tracking-wider"><i class="fa-solid fa-user mr-1 text-emerald-500"></i>${resp} (${S(ingresosPorResp[resp])})</p></div>`;
-              const maxI = arrIngUser[0]?.monto || 1;
-              arrIngUser.forEach(i => {
-                  panelIngCat.innerHTML += `
-                  <div class="mb-1 pl-2 border-l-2 border-emerald-200">
-                    <div class="flex justify-between items-center text-[10px] mb-0.5">
-                      <span class="font-bold text-slate-700 truncate pr-1">${esc(i.cat)}</span>
-                      <span class="text-slate-500 font-medium">${S(i.monto)}</span>
-                    </div>
-                    <div class="w-full bg-slate-50 rounded-full h-1">
-                      <div class="bg-emerald-400 h-1 rounded-full transition-all" style="width:${(i.monto/maxI)*100}%"></div>
-                    </div>
-                  </div>`;
-              });
-          }
-      });
-      if(panelIngCat.innerHTML === '') panelIngCat.innerHTML = '<p class="text-[10px] text-slate-400 py-2">Sin ingresos en este rango.</p>';
   }
 
   // 4. RENDERIZAR PRESUPUESTOS Y BARRAS
