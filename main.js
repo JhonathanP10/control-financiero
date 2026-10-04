@@ -385,7 +385,7 @@ function renderHeaderUsuario() {
     </button>`;
 }
 
-/* LÓGICA PRINCIPAL Y REESTRUCTURACIÓN DE DISEÑO LIMPIA */
+/* LÓGICA PRINCIPAL Y REESTRUCTURACIÓN DE DISEÑO LIMPIA Y ÚNICA */
 function procesarYRenderizarDashboard() {
   const filtro = calcularRango();
   const etiq = document.getElementById('etiquetaPeriodo');
@@ -502,7 +502,7 @@ function procesarYRenderizarDashboard() {
     elRes.className = 'text-[10px] mt-1 font-bold ' + (resPer >= 0 ? 'text-emerald-600' : 'text-rose-600');
   }
 
-  // 3. ORGANIZACIÓN ÚNICA SIN DUPLICADOS EN EL DOM
+  // 3. ORGANIZACIÓN ÚNICA SIN DUPLICACIONES EN EL DOM
   const viewDash = document.getElementById('viewDash');
   if (viewDash) {
       let mainContainer = document.getElementById('dashboardMainGrid');
@@ -511,9 +511,14 @@ function procesarYRenderizarDashboard() {
           mainContainer.id = 'dashboardMainGrid';
           mainContainer.className = 'space-y-6 mt-4';
           
-          // Movemos los elementos del dashboard que no sean el header de usuario o el selector de fechas
-          const elementosMover = Array.from(viewDash.children).filter(el => el.id !== 'headerDashUsuario' && el.id !== 'panelFondosCreditos');
-          elementosMover.forEach(el => mainContainer.appendChild(el));
+          // Recolectar todos los paneles sueltos que ya venían en el HTML original y meterlos al contenedor único
+          const panelesOriginales = Array.from(viewDash.children).filter(el => 
+              el.id !== 'headerDashUsuario' && 
+              el.id !== 'panelFondosCreditos' &&
+              el.id !== 'dashboardMainGrid'
+          );
+          
+          panelesOriginales.forEach(el => mainContainer.appendChild(el));
           viewDash.appendChild(mainContainer);
       }
 
@@ -526,10 +531,9 @@ function procesarYRenderizarDashboard() {
           mainContainer.prepend(filaSuperior);
       }
 
-      // Asegurar tarjetas en la fila superior
-      let cardSaldo = document.getElementById('cardSaldoHistorico');
-      if (!cardSaldo) {
-          cardSaldo = document.createElement('div');
+      // Crear las 4 tarjetas una sola vez si no existen
+      if (!document.getElementById('cardSaldoHistorico')) {
+          const cardSaldo = document.createElement('div');
           cardSaldo.id = 'cardSaldoHistorico';
           cardSaldo.className = 'bg-slate-900 rounded-3xl p-5 text-white shadow-xl shadow-slate-900/20 relative overflow-hidden flex flex-col justify-between min-h-[150px]';
           cardSaldo.innerHTML = `
@@ -551,9 +555,8 @@ function procesarYRenderizarDashboard() {
           filaSuperior.appendChild(cardSaldo);
       }
 
-      let cardIngCat = document.getElementById('cardIngresosCat');
-      if (!cardIngCat) {
-          cardIngCat = document.createElement('div');
+      if (!document.getElementById('cardIngresosCat')) {
+          const cardIngCat = document.createElement('div');
           cardIngCat.id = 'cardIngresosCat';
           cardIngCat.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col min-h-[150px]';
           cardIngCat.innerHTML = `
@@ -562,9 +565,8 @@ function procesarYRenderizarDashboard() {
           filaSuperior.appendChild(cardIngCat);
       }
 
-      let cardIngPer = document.getElementById('cardIngresosPeriodo');
-      if (!cardIngPer) {
-          cardIngPer = document.createElement('div');
+      if (!document.getElementById('cardIngresosPeriodo')) {
+          const cardIngPer = document.createElement('div');
           cardIngPer.id = 'cardIngresosPeriodo';
           cardIngPer.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col justify-between min-h-[150px] relative overflow-hidden';
           cardIngPer.innerHTML = `
@@ -580,9 +582,8 @@ function procesarYRenderizarDashboard() {
           filaSuperior.appendChild(cardIngPer);
       }
 
-      let cardGasPer = document.getElementById('cardGastosPeriodo');
-      if (!cardGasPer) {
-          cardGasPer = document.createElement('div');
+      if (!document.getElementById('cardGastosPeriodo')) {
+          const cardGasPer = document.createElement('div');
           cardGasPer.id = 'cardGastosPeriodo';
           cardGasPer.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col justify-between min-h-[150px] relative overflow-hidden';
           cardGasPer.innerHTML = `
@@ -622,7 +623,7 @@ function procesarYRenderizarDashboard() {
           filaInferior.appendChild(colDer);
       }
 
-      // Recolocar los paneles originales dentro de sus columnas sin duplicarlos
+      // Mover los paneles de presupuestos, grupos y movimientos a sus respectivas columnas sin duplicar
       const boxPresupuestos = document.getElementById('panelPresupuestos')?.closest('.bg-white');
       const boxGrupos = document.getElementById('panelGrupos')?.closest('.bg-white');
       const boxMovimientos = document.getElementById('panelMovimientos')?.closest('.bg-white');
