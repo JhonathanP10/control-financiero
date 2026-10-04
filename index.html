@@ -2,504 +2,369 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Control Financiero - Supabase</title>
+  <!-- META TAGS PWA Y OPTIMIZACIÓN MÓVIL (SUPERVISTA APP NATIVA) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Wallet - Finanzas Personales</title>
+  
+  <!-- MANIFEST PARA INSTALACIÓN EN CHROME/ANDROID -->
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2845/2845890.png">
+
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
   <style>
-    body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; }
+    body { font-family: 'Inter', sans-serif; background-color: #f8fafc; -webkit-tap-highlight-color: transparent; }
     input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-    optgroup { font-weight: 700; color: #475569; } option { font-weight: 400; color: #1f2937; }
+    optgroup { font-weight: 700; color: #475569; } option { font-weight: 500; color: #1e293b; }
     .nav-item.activo { background-color: rgba(255,255,255,.12); color: #fff; }
+    .nav-item.activo i { color: #38bdf8; } /* Toque de color en iconos activos */
     .chip { border: 1px solid #e2e8f0; background: #fff; color: #475569; }
     .chip.activo { background: #0f172a; border-color: #0f172a; color: #fff; }
-    .scroll-fino::-webkit-scrollbar { width: 6px; }
+    .scroll-fino::-webkit-scrollbar { width: 4px; }
     .scroll-fino::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+    /* Animaciones suaves para la app */
+    .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
   </style>
 </head>
-<body class="text-slate-800 antialiased">
+<body class="text-slate-800 antialiased overscroll-none select-none">
 
 <div class="flex min-h-screen">
-  <!-- BARRA LATERAL -->
-  <aside class="hidden lg:flex lg:flex-col w-64 bg-slate-900 text-slate-300 fixed inset-y-0 left-0 z-40">
+  <!-- BARRA LATERAL (ESCRITORIO) -->
+  <aside class="hidden lg:flex lg:flex-col w-64 bg-slate-900 text-slate-300 fixed inset-y-0 left-0 z-40 shadow-2xl">
     <div class="px-6 pt-7 pb-6">
-      <h1 class="text-xl font-extrabold text-white tracking-tight">Wallet</h1>
-      <p class="text-xs text-slate-400 mt-0.5">Jhonathan &amp; Sindy</p>
+      <h1 class="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
+        <i class="fa-solid fa-wallet text-sky-400"></i> Wallet
+      </h1>
+      <p class="text-[11px] text-slate-400 mt-1 uppercase tracking-wider font-bold">Jhonathan &amp; Sindy</p>
     </div>
 
-    <div class="px-6 pb-5">
-      <div class="rounded-2xl bg-slate-800/70 p-4 border border-slate-700/60">
-        <p class="text-[11px] text-slate-400">Saldo disponible</p>
+    <div class="px-5 pb-5">
+      <div class="rounded-2xl bg-slate-800/80 p-4 border border-slate-700/50 shadow-inner">
+        <p class="text-[10px] uppercase font-bold tracking-wider text-slate-400">Saldo global</p>
         <p class="text-2xl font-bold text-white mt-1" id="sbSaldo">S/ 0.00</p>
-        <div class="flex justify-between mt-3 text-[11px]">
-          <span class="text-emerald-400"><i class="fa-solid fa-arrow-down"></i> <span id="sbIngresos">0.00</span></span>
-          <span class="text-rose-400"><i class="fa-solid fa-arrow-up"></i> <span id="sbGastos">0.00</span></span>
+        <div class="flex justify-between mt-3 text-xs font-medium">
+          <span class="text-emerald-400"><i class="fa-solid fa-arrow-down mr-1"></i><span id="sbIngresos">0.00</span></span>
+          <span class="text-rose-400"><i class="fa-solid fa-arrow-up mr-1"></i><span id="sbGastos">0.00</span></span>
         </div>
       </div>
-      <div class="rounded-2xl bg-slate-800/70 p-4 border border-slate-700/60 mt-3">
-        <p class="text-[11px] text-slate-400">Deuda pendiente</p>
-        <p class="text-lg font-bold text-white mt-1" id="sbDeuda">S/ 0.00</p>
-        <div class="w-full bg-slate-700 rounded-full h-1.5 mt-2"><div class="bg-emerald-400 h-1.5 rounded-full" id="sbDeudaBarra" style="width:0%"></div></div>
-        <p class="text-[10px] text-slate-400 mt-1" id="sbDeudaTexto">Sin deudas registradas</p>
-      </div>
     </div>
 
-    <nav class="flex-1 px-4 space-y-1">
-      <button data-vista="dash" class="nav-item activo w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium hover:bg-white/10 transition-colors"><i class="fa-solid fa-chart-pie w-4 text-center"></i> Panel</button>
-      <button data-vista="registro" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium hover:bg-white/10 transition-colors"><i class="fa-solid fa-pen-to-square w-4 text-center"></i> Registrar</button>
-      <button data-vista="deudas" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium hover:bg-white/10 transition-colors"><i class="fa-solid fa-hand-holding-dollar w-4 text-center"></i> Salir de deudas</button>
-      <button data-vista="config" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium hover:bg-white/10 transition-colors"><i class="fa-solid fa-sliders w-4 text-center"></i> Categorías</button>
+    <nav class="flex-1 px-4 space-y-1.5">
+      <button data-vista="dash" class="nav-item activo w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold hover:bg-white/10 transition-colors"><i class="fa-solid fa-chart-pie w-5 text-center"></i> Panel</button>
+      <button data-vista="registro" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold hover:bg-white/10 transition-colors"><i class="fa-solid fa-pen-to-square w-5 text-center"></i> Registrar</button>
+      <button data-vista="deudas" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold hover:bg-white/10 transition-colors"><i class="fa-solid fa-credit-card w-5 text-center"></i> Créditos</button>
+      <button data-vista="config" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold hover:bg-white/10 transition-colors"><i class="fa-solid fa-sliders w-5 text-center"></i> Ajustes</button>
     </nav>
 
-    <div class="px-6 py-5 border-t border-slate-800">
-      <button onclick="cargarDashboard()" class="text-xs text-slate-400 hover:text-white transition-colors"><i class="fa-solid fa-rotate"></i> Actualizar datos</button>
-      <p class="text-[10px] text-slate-600 mt-2" id="ultActualizacion"></p>
+    <div class="px-6 py-6 border-t border-slate-800">
+      <button onclick="cargarDashboard()" class="text-xs font-semibold text-slate-400 hover:text-white transition-colors flex items-center gap-2"><i class="fa-solid fa-rotate"></i> Sincronizar App</button>
     </div>
   </aside>
 
-  <!-- CONTENIDO -->
-  <main class="flex-1 lg:ml-64 pb-24 lg:pb-10 w-full">
-    <header class="lg:hidden sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200 px-4 py-3 flex items-center justify-between">
-      <div>
-        <h1 class="text-lg font-bold">Wallet</h1>
-        <p class="text-[11px] text-slate-500" id="tituloVistaMovil">Panel</p>
+  <!-- CONTENIDO PRINCIPAL -->
+  <main class="flex-1 lg:ml-64 pb-24 lg:pb-10 w-full animate-fade-in">
+    <!-- HEADER MÓVIL OPTIMIZADO -->
+    <header class="lg:hidden sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-slate-200/80 px-5 py-3.5 flex items-center justify-between shadow-sm pt-[env(safe-area-inset-top)]">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 bg-sky-500 text-white rounded-xl flex items-center justify-center shadow-md shadow-sky-500/20">
+          <i class="fa-solid fa-wallet text-sm"></i>
+        </div>
+        <div>
+          <h1 class="text-sm font-bold leading-none text-slate-900">Wallet</h1>
+          <p class="text-[10px] text-slate-500 font-medium mt-1" id="tituloVistaMovil">Panel General</p>
+        </div>
       </div>
       <div class="text-right">
-        <p class="text-[10px] text-slate-500">Saldo</p>
-        <p class="text-base font-bold" id="sbSaldoMovil">S/ 0.00</p>
+        <p class="text-[9px] uppercase tracking-wider font-bold text-slate-400">Saldo Total</p>
+        <p class="text-sm font-bold text-slate-800 mt-0.5" id="sbSaldoMovil">S/ 0.00</p>
       </div>
     </header>
 
     <!-- VISTA DASHBOARD -->
-    <section id="viewDash" class="p-4 lg:p-8">
-      <div class="hidden lg:flex items-end justify-between mb-5">
-        <div>
-          <h2 class="text-2xl font-bold text-slate-900">Panel</h2>
-          <p class="text-sm text-slate-500">Mostrando <span id="nombrePeriodo">este mes</span></p>
-        </div>
-      </div>
-
-      <div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-4 mb-5">
-        <div class="flex flex-wrap items-center gap-2">
-          <div class="flex items-center gap-1 mr-1">
-            <button onclick="moverPeriodo(-1)" id="btnAnterior" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-chevron-left text-xs"></i></button>
-            <button onclick="moverPeriodo(1)" id="btnSiguiente" class="w-8 h-8 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"><i class="fa-solid fa-chevron-right text-xs"></i></button>
+    <section id="viewDash" class="p-4 lg:p-8 space-y-4 lg:space-y-6 max-w-7xl mx-auto select-auto">
+      
+      <!-- Selector de Periodo -->
+      <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-3.5">
+        <div class="flex flex-nowrap overflow-x-auto scroll-fino items-center gap-2 pb-1">
+          <div class="flex items-center gap-1 mr-1 flex-shrink-0">
+            <button onclick="moverPeriodo(-1)" id="btnAnterior" class="w-8 h-8 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 active:scale-95 transition-transform flex items-center justify-center"><i class="fa-solid fa-chevron-left text-[10px]"></i></button>
+            <button onclick="moverPeriodo(1)" id="btnSiguiente" class="w-8 h-8 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 active:scale-95 transition-transform flex items-center justify-center"><i class="fa-solid fa-chevron-right text-[10px]"></i></button>
           </div>
-          <button data-preset="dia" class="chip px-3 py-1.5 rounded-full text-xs font-semibold">Día</button>
-          <button data-preset="semana" class="chip px-3 py-1.5 rounded-full text-xs font-semibold">Semana</button>
-          <button data-preset="mes" class="chip activo px-3 py-1.5 rounded-full text-xs font-semibold">Mes</button>
-          <button data-preset="anio" class="chip px-3 py-1.5 rounded-full text-xs font-semibold">Año</button>
-          <button data-preset="rango" class="chip px-3 py-1.5 rounded-full text-xs font-semibold">Rango</button>
-          <button data-preset="todo" class="chip px-3 py-1.5 rounded-full text-xs font-semibold">Todo</button>
-          <span class="ml-auto text-xs font-semibold text-slate-700 bg-slate-100 px-3 py-1.5 rounded-full" id="etiquetaPeriodo">—</span>
-        </div>
-        <div id="rangoPersonalizado" class="hidden mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-end gap-3">
-          <div><label class="text-[11px] text-slate-500 block mb-1" for="fDesde">Desde</label><input type="date" id="fDesde" class="bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"></div>
-          <div><label class="text-[11px] text-slate-500 block mb-1" for="fHasta">Hasta</label><input type="date" id="fHasta" class="bg-slate-50 border border-slate-200 rounded-xl p-2 text-sm"></div>
-          <button onclick="aplicarRango()" class="bg-slate-900 text-white text-sm font-semibold px-4 py-2 rounded-xl active:scale-95">Aplicar</button>
+          <button data-preset="dia" class="chip px-3.5 py-1.5 rounded-xl text-[11px] font-bold flex-shrink-0 transition-colors">Día</button>
+          <button data-preset="semana" class="chip px-3.5 py-1.5 rounded-xl text-[11px] font-bold flex-shrink-0 transition-colors">Semana</button>
+          <button data-preset="mes" class="chip activo px-3.5 py-1.5 rounded-xl text-[11px] font-bold flex-shrink-0 transition-colors">Mes</button>
+          <button data-preset="anio" class="chip px-3.5 py-1.5 rounded-xl text-[11px] font-bold flex-shrink-0 transition-colors">Año</button>
+          <span class="ml-auto text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-100 px-3 py-1.5 rounded-xl whitespace-nowrap flex-shrink-0" id="etiquetaPeriodo">—</span>
         </div>
       </div>
 
-      <div class="grid grid-cols-1 xl:grid-cols-3 gap-5 xl:gap-6">
-        <div class="xl:col-span-2 space-y-5 xl:space-y-6">
+      <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:gap-6">
+        <div class="xl:col-span-2 space-y-4 lg:space-y-6">
 
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="bg-gradient-to-tr from-slate-900 to-slate-700 rounded-3xl p-5 text-white shadow-lg relative overflow-hidden">
-              <div class="absolute -right-6 -top-6 w-28 h-28 bg-white opacity-5 rounded-full blur-2xl"></div>
-              <p class="text-slate-300 text-xs mb-1">Saldo disponible (histórico)</p>
-              <h3 class="text-3xl font-bold" id="saldoDisponible">S/ 0.00</h3>
-              <div class="grid grid-cols-2 gap-4 text-[11px] border-t border-slate-600 pt-3 mt-4">
-                <div>
-                  <p class="text-slate-400 font-semibold mb-1">Jhonathan</p>
-                  <p class="text-emerald-400"><i class="fa-solid fa-arrow-down"></i> <span id="jhoIngresos">S/ 0.00</span></p>
-                  <p class="text-rose-400"><i class="fa-solid fa-arrow-up"></i> <span id="jhoGastos">S/ 0.00</span></p>
-                  <p class="font-bold mt-1 border-t border-slate-600/50 pt-1" id="jhoSaldo">S/ 0.00</p>
+          <!-- Tarjetas Principales -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:gap-4">
+            <div class="bg-slate-900 rounded-3xl p-5 text-white shadow-xl shadow-slate-900/20 relative overflow-hidden flex flex-col justify-between sm:col-span-3 lg:col-span-1 min-h-[140px]">
+              <div class="absolute -right-4 -top-4 text-slate-800/50 text-7xl"><i class="fa-solid fa-vault"></i></div>
+              <div class="relative z-10">
+                <p class="text-sky-300 text-[10px] font-bold uppercase tracking-wider mb-1">Saldo Histórico</p>
+                <h3 class="text-3xl font-extrabold tracking-tight" id="saldoDisponible">S/ 0.00</h3>
+              </div>
+              <div class="relative z-10 grid grid-cols-2 gap-4 text-[10px] mt-4">
+                <div class="bg-white/10 p-2 rounded-xl backdrop-blur-sm border border-white/5">
+                  <p class="text-slate-300 font-bold mb-1">Jhonathan</p>
+                  <p class="font-bold text-white" id="jhoSaldo">S/ 0.00</p>
                 </div>
-                <div class="text-right">
-                  <p class="text-slate-400 font-semibold mb-1">Sindy</p>
-                  <p class="text-emerald-400"><span id="sinIngresos">S/ 0.00</span> <i class="fa-solid fa-arrow-down"></i></p>
-                  <p class="text-rose-400"><span id="sinGastos">S/ 0.00</span> <i class="fa-solid fa-arrow-up"></i></p>
-                  <p class="font-bold mt-1 border-t border-slate-600/50 pt-1" id="sinSaldo">S/ 0.00</p>
+                <div class="bg-white/10 p-2 rounded-xl backdrop-blur-sm border border-white/5">
+                  <p class="text-slate-300 font-bold mb-1">Sindy</p>
+                  <p class="font-bold text-white" id="sinSaldo">S/ 0.00</p>
                 </div>
               </div>
             </div>
 
-            <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col justify-between">
-              <div class="flex items-center justify-between">
-                <p class="text-xs text-slate-500">Ingresos del periodo</p>
-                <span class="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center"><i class="fa-solid fa-arrow-down text-xs"></i></span>
-              </div>
-              <p class="text-2xl font-bold text-slate-900 mt-4" id="periodoIngresos">S/ 0.00</p>
-              <div class="flex justify-between text-[10px] text-slate-400 mt-2 border-t border-slate-100 pt-2">
-                <span id="periodoJhoIn">Jho: S/ 0.00</span>
-                <span id="periodoSinIn">Sin: S/ 0.00</span>
-              </div>
-              <p class="text-[11px] text-slate-400 mt-1" id="periodoTasaAhorro"></p>
-            </div>
-
-            <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm flex flex-col justify-between">
-              <div class="flex items-center justify-between">
-                <p class="text-xs text-slate-500">Gastos del periodo</p>
-                <span class="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center"><i class="fa-solid fa-arrow-up text-xs"></i></span>
-              </div>
-              <p class="text-2xl font-bold text-slate-900 mt-4" id="periodoGastos">S/ 0.00</p>
-              <p class="text-[11px] text-slate-400 mt-1" id="periodoResultado"></p>
-            </div>
-          </div>
-
-          <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm">
-            <div class="flex items-start justify-between mb-3">
+            <div class="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col justify-between relative overflow-hidden">
+              <div class="absolute right-0 top-0 w-16 h-16 bg-emerald-50 rounded-bl-full flex items-start justify-end p-3"><i class="fa-solid fa-arrow-down text-emerald-500"></i></div>
               <div>
-                <h3 class="text-base font-bold text-slate-800">Camino sin deudas</h3>
-                <p class="text-xs text-slate-500" id="deudaSubtitulo">Registra tus deudas para ver el plan.</p>
+                <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Ingresos Periodo</p>
+                <p class="text-xl lg:text-2xl font-bold text-slate-800 mt-2" id="periodoIngresos">S/ 0.00</p>
               </div>
-              <button onclick="mostrarVista('deudas')" class="text-xs font-semibold text-slate-600 border border-slate-200 rounded-xl px-3 py-1.5 hover:bg-slate-50">Ver plan</button>
+              <div class="flex justify-between text-[10px] font-semibold text-slate-400 mt-4 bg-slate-50 px-3 py-2 rounded-xl">
+                <span id="periodoJhoIn">Jho: 0.00</span>
+                <span id="periodoSinIn">Sin: 0.00</span>
+              </div>
             </div>
-            <div class="w-full bg-slate-100 rounded-full h-3"><div class="bg-emerald-500 h-3 rounded-full transition-all duration-500" id="deudaBarraPanel" style="width:0%"></div></div>
-            <div class="flex justify-between text-[11px] text-slate-500 mt-2">
-              <span id="deudaPagadoPanel">Pagado S/ 0.00</span>
-              <span id="deudaRestantePanel">Falta S/ 0.00</span>
+
+            <div class="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col justify-between relative overflow-hidden">
+              <div class="absolute right-0 top-0 w-16 h-16 bg-rose-50 rounded-bl-full flex items-start justify-end p-3"><i class="fa-solid fa-arrow-up text-rose-500"></i></div>
+              <div>
+                <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Gastos Periodo</p>
+                <p class="text-xl lg:text-2xl font-bold text-slate-800 mt-2" id="periodoGastos">S/ 0.00</p>
+              </div>
+              <div class="mt-4 bg-slate-50 px-3 py-2 rounded-xl flex items-center">
+                 <span id="periodoResultado" class="text-[10px] font-bold">Calculando...</span>
+              </div>
             </div>
           </div>
 
-          <div>
-            <div class="flex justify-between items-end mb-3">
-              <h3 class="text-base font-bold text-slate-800">Pagos pendientes</h3>
-              <span class="text-xs font-semibold text-slate-500 bg-slate-200 px-2 py-1 rounded-lg" id="totalCuotasPendientes">Calculando…</span>
-            </div>
-            <div id="cargandoAlertas" class="text-center py-4"><i class="fa-solid fa-circle-notch fa-spin text-slate-400 text-xl"></i></div>
-            <div id="panelAlertas" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"></div>
-          </div>
-
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm">
-              <div class="flex items-baseline justify-between mb-1">
-                <h3 class="text-base font-bold text-slate-800">Presupuestos</h3>
-                <span class="text-xs font-bold text-slate-700" id="totalPresupuestos">S/ 0.00 / S/ 0.00</span>
+          <!-- Presupuestos y Grupos -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+            <div class="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm">
+              <div class="flex items-end justify-between mb-2">
+                <h3 class="text-sm font-bold text-slate-800">Presupuestos</h3>
+                <span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg" id="totalPresupuestos">0.00 / 0.00</span>
               </div>
-              <div class="w-full bg-slate-100 rounded-full h-2 mb-2">
-                <div class="bg-sky-500 h-2 rounded-full transition-all" id="barraTotalPresupuestos" style="width: 0%"></div>
+              <div class="w-full bg-slate-100 rounded-full h-1.5 mb-4 overflow-hidden">
+                <div class="bg-sky-500 h-1.5 rounded-full transition-all" id="barraTotalPresupuestos" style="width: 0%"></div>
               </div>
-              <p class="text-[10px] text-slate-400 mb-4" id="notaPresupuesto"></p>
-              <div id="panelPresupuestos" class="flex flex-col gap-4 max-h-96 overflow-y-auto scroll-fino pr-1"></div>
+              <div id="panelPresupuestos" class="flex flex-col gap-3.5 max-h-64 overflow-y-auto scroll-fino pr-1"></div>
             </div>
             
-            <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm">
-              <h3 class="text-base font-bold text-slate-800 mb-4">Gasto por grupo</h3>
-              <div id="panelGrupos" class="flex flex-col gap-3"></div>
+            <div class="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm">
+              <h3 class="text-sm font-bold text-slate-800 mb-4">Gasto por Grupo</h3>
+              <div id="panelGrupos" class="flex flex-col gap-3.5"></div>
             </div>
           </div>
         </div>
 
-        <div class="xl:col-span-1 space-y-5 xl:space-y-6">
-          <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm">
-            <h3 class="text-base font-bold text-slate-800 mb-4">Ingresos por categoría</h3>
-            <div id="panelIngresosCat" class="flex flex-col gap-3"></div>
-          </div>
-          <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm">
-            <div class="flex items-baseline justify-between mb-4">
-              <h3 class="text-base font-bold text-slate-800">Movimientos</h3>
-              <span class="text-[10px] text-slate-400" id="contadorMovimientos"></span>
+        <!-- Movimientos -->
+        <div class="xl:col-span-1 space-y-4 lg:space-y-6">
+          <div class="bg-white rounded-3xl p-4 lg:p-5 border border-slate-200/80 shadow-sm">
+            <div class="flex items-center justify-between mb-3 border-b border-slate-100 pb-3">
+              <h3 class="text-sm font-bold text-slate-800">Movimientos Recientes</h3>
+              <button onclick="mostrarVista('registro')" class="w-7 h-7 bg-slate-900 text-white rounded-full flex items-center justify-center text-xs active:scale-90 transition-transform"><i class="fa-solid fa-plus"></i></button>
             </div>
-            <div id="panelMovimientos" class="divide-y divide-slate-100 max-h-[32rem] overflow-y-auto scroll-fino pr-2"></div>
+            <div id="panelMovimientos" class="max-h-[28rem] overflow-y-auto scroll-fino pr-1"></div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- VISTA REGISTRO -->
-    <section id="viewRegistro" class="hidden p-4 lg:p-8">
-      <div class="mb-6">
-        <h2 class="text-2xl font-bold text-slate-900">Registrar</h2>
-        <p class="text-sm text-slate-500">Anota una salida o una entrada de dinero.</p>
+    <!-- VISTA REGISTRO (FORMULARIO) -->
+    <section id="viewRegistro" class="hidden p-4 lg:p-8 max-w-lg mx-auto">
+      <div class="mb-5">
+        <h2 class="text-xl font-bold text-slate-900">Registrar Operación</h2>
       </div>
-      <div class="max-w-xl">
-        <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm">
-          <div class="flex space-x-1 mb-6 bg-slate-100 p-1 rounded-xl">
-            <button id="btnTabGasto" class="flex-1 py-2 text-sm font-bold rounded-lg bg-white shadow-sm text-slate-800 transition-all" onclick="cambiarTab('gasto')">Gastos</button>
-            <button id="btnTabIngreso" class="flex-1 py-2 text-sm font-medium rounded-lg text-slate-500 transition-all" onclick="cambiarTab('ingreso')">Ingresos</button>
-          </div>
+      
+      <div class="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm">
+        <div class="flex space-x-1 mb-6 bg-slate-100/80 p-1.5 rounded-2xl">
+          <button id="btnTabGasto" class="flex-1 py-2.5 text-xs font-bold rounded-xl bg-white shadow-sm text-slate-800 transition-all" onclick="cambiarTab('gasto')">Salida (Gasto)</button>
+          <button id="btnTabIngreso" class="flex-1 py-2.5 text-xs font-bold rounded-xl text-slate-500 hover:text-slate-800 transition-all" onclick="cambiarTab('ingreso')">Entrada (Ingreso)</button>
+        </div>
 
-          <form id="formGasto" onsubmit="enviarGasto(event)">
-            <div class="mb-5 text-center">
-              <label class="text-xs font-semibold text-slate-400" for="montoGasto">Monto (S/)</label>
-              <input type="number" step="0.01" class="w-full text-center text-4xl font-bold text-slate-800 bg-transparent border-b-2 border-slate-100 focus:border-rose-400 focus:outline-none py-2" id="montoGasto" placeholder="0.00" required>
+        <form id="formGasto" onsubmit="enviarGasto(event)">
+          <div class="mb-6 bg-slate-50 rounded-2xl p-4 border border-slate-100">
+            <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block text-center mb-1">Monto a registrar</label>
+            <div class="flex justify-center items-baseline gap-1">
+              <span class="text-xl font-bold text-slate-400">S/</span>
+              <input type="number" step="0.01" class="w-32 text-center text-4xl font-extrabold text-slate-800 bg-transparent focus:outline-none" id="montoGasto" placeholder="0.00" required>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          </div>
+          
+          <div class="space-y-4 mb-6">
+            <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="text-xs font-semibold text-slate-500 mb-1 block" for="fechaGasto">Fecha</label>
-                <input type="date" class="w-full bg-slate-50 border border-slate-200 py-2.5 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-400 text-sm font-medium" id="fechaGasto" required>
+                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Fecha</label>
+                <input type="date" class="w-full bg-slate-50 border border-slate-200 py-3 px-3.5 rounded-2xl focus:outline-none focus:border-sky-500 text-xs font-bold" id="fechaGasto" required>
               </div>
               <div>
-                <label class="text-xs font-semibold text-slate-500 mb-1 block" for="responsableGasto">Responsable</label>
-                <select class="w-full bg-slate-50 border border-slate-200 py-2.5 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-400 text-sm" id="responsableGasto">
+                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Responsable</label>
+                <select class="w-full bg-slate-50 border border-slate-200 py-3 px-3.5 rounded-2xl focus:outline-none focus:border-sky-500 text-xs font-bold" id="responsableGasto">
                   <option value="Jhonathan">Jhonathan</option><option value="Sindy">Sindy</option>
                 </select>
               </div>
             </div>
-            <div class="mb-4">
-              <label class="text-xs font-semibold text-slate-500 mb-1 block" for="categoriaGasto">Categoría</label>
-              <select class="w-full bg-slate-50 border border-slate-200 py-2.5 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-400 text-sm" id="categoriaGasto" required></select>
+            <div>
+              <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Categoría de Gasto</label>
+              <select class="w-full bg-slate-50 border border-slate-200 py-3 px-3.5 rounded-2xl focus:outline-none focus:border-sky-500 text-xs font-bold" id="categoriaGasto" required></select>
             </div>
-            <div class="mb-6">
-              <label class="text-xs font-semibold text-slate-500 mb-1 block" for="descripcionGasto">Descripción</label>
-              <input type="text" class="w-full bg-slate-50 border border-slate-200 py-2.5 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-400 text-sm" id="descripcionGasto" placeholder="Opcional: detalle del gasto">
+            <div>
+              <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Nota / Detalle</label>
+              <input type="text" class="w-full bg-slate-50 border border-slate-200 py-3 px-3.5 rounded-2xl focus:outline-none focus:border-sky-500 text-xs font-medium" id="descripcionGasto" placeholder="¿En qué se gastó? (Opcional)">
             </div>
-            <button type="submit" id="btnGuardarGasto" class="w-full bg-rose-500 hover:bg-rose-600 text-white font-semibold py-3.5 rounded-2xl shadow-lg active:scale-95 transition">Registrar salida</button>
-          </form>
+          </div>
+          <button type="submit" id="btnGuardarGasto" class="w-full bg-slate-900 active:scale-95 text-white font-bold py-4 rounded-2xl shadow-lg shadow-slate-900/20 transition-all">Guardar Salida</button>
+        </form>
 
-          <form id="formIngreso" onsubmit="enviarIngreso(event)" class="hidden">
-            <div class="mb-5 text-center">
-              <label class="text-xs font-semibold text-slate-400" for="montoIngreso">Monto (S/)</label>
-              <input type="number" step="0.01" class="w-full text-center text-4xl font-bold text-slate-800 bg-transparent border-b-2 border-slate-100 focus:border-emerald-500 focus:outline-none py-2" id="montoIngreso" placeholder="0.00" required>
+        <form id="formIngreso" onsubmit="enviarIngreso(event)" class="hidden">
+          <div class="mb-6 bg-emerald-50/50 rounded-2xl p-4 border border-emerald-100/50">
+            <label class="text-[10px] font-bold uppercase tracking-wider text-emerald-600 block text-center mb-1">Monto que ingresa</label>
+            <div class="flex justify-center items-baseline gap-1">
+              <span class="text-xl font-bold text-emerald-500">S/</span>
+              <input type="number" step="0.01" class="w-32 text-center text-4xl font-extrabold text-emerald-700 bg-transparent focus:outline-none" id="montoIngreso" placeholder="0.00" required>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          </div>
+          
+          <div class="space-y-4 mb-6">
+            <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="text-xs font-semibold text-slate-500 mb-1 block" for="fechaIngreso">Fecha</label>
-                <input type="date" class="w-full bg-slate-50 border border-slate-200 py-2.5 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-medium" id="fechaIngreso" required>
+                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Fecha</label>
+                <input type="date" class="w-full bg-slate-50 border border-slate-200 py-3 px-3.5 rounded-2xl focus:outline-none focus:border-emerald-500 text-xs font-bold" id="fechaIngreso" required>
               </div>
               <div>
-                <label class="text-xs font-semibold text-slate-500 mb-1 block" for="responsableIngreso">Responsable</label>
-                <select class="w-full bg-slate-50 border border-slate-200 py-2.5 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" id="responsableIngreso">
+                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Responsable</label>
+                <select class="w-full bg-slate-50 border border-slate-200 py-3 px-3.5 rounded-2xl focus:outline-none focus:border-emerald-500 text-xs font-bold" id="responsableIngreso">
                   <option value="Jhonathan">Jhonathan</option><option value="Sindy">Sindy</option>
                 </select>
               </div>
             </div>
-            <div class="mb-4">
-              <label class="text-xs font-semibold text-slate-500 mb-1 block" for="categoriaIngreso">Categoría</label>
-              <select class="w-full bg-slate-50 border border-slate-200 py-2.5 px-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" id="categoriaIngreso" required></select>
+            <div>
+              <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Categoría de Ingreso</label>
+              <select class="w-full bg-slate-50 border border-slate-200 py-3 px-3.5 rounded-2xl focus:outline-none focus:border-emerald-500 text-xs font-bold" id="categoriaIngreso" required></select>
             </div>
-            <div class="mb-6">
-              <label class="text-xs font-semibold text-slate-500 mb-1 block" for="comentarioIngreso">Comentario</label>
-              <input type="text" class="w-full bg-slate-50 border border-slate-200 py-2.5 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" id="comentarioIngreso" placeholder="Opcional: detalle del ingreso">
+            <div>
+              <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Comentario</label>
+              <input type="text" class="w-full bg-slate-50 border border-slate-200 py-3 px-3.5 rounded-2xl focus:outline-none focus:border-emerald-500 text-xs font-medium" id="comentarioIngreso" placeholder="Origen del dinero (Opcional)">
             </div>
-            <button type="submit" id="btnGuardarIngreso" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3.5 rounded-2xl shadow-lg active:scale-95 transition">Registrar entrada</button>
-          </form>
-        </div>
+          </div>
+          <button type="submit" id="btnGuardarIngreso" class="w-full bg-emerald-500 active:scale-95 text-white font-bold py-4 rounded-2xl shadow-lg shadow-emerald-500/20 transition-all">Guardar Entrada</button>
+        </form>
       </div>
     </section>
 
-    <!-- VISTA SALIR DE DEUDAS -->
-    <section id="viewDeudas" class="hidden p-4 lg:p-8">
-      <div class="mb-6">
-        <h2 class="text-2xl font-bold text-slate-900">Salir de deudas</h2>
-        <p class="text-sm text-slate-500">Cuánto pagas de más cada mes decide cuándo terminas.</p>
+    <!-- VISTA DEUDAS / CRÉDITOS (Detallado por JS) -->
+    <section id="viewDeudas" class="hidden p-4 lg:p-8 max-w-5xl mx-auto"></section>
+
+    <!-- VISTA CONFIGURACIÓN / CATEGORÍAS -->
+    <section id="viewConfig" class="hidden p-4 lg:p-8 max-w-5xl mx-auto">
+      <div class="mb-5">
+        <h2 class="text-xl font-bold text-slate-900">Ajustes y Categorías</h2>
       </div>
-
-      <div id="deudasVacio" class="hidden bg-white rounded-3xl p-8 border border-slate-100 shadow-sm text-center max-w-xl">
-        <p class="text-sm text-slate-600 mb-4">Aún no registras deudas.</p>
-      </div>
-
-      <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div class="xl:col-span-2 space-y-5" id="bloquePlan">
-          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div class="bg-white rounded-3xl p-4 border border-slate-100 shadow-sm">
-              <p class="text-[11px] text-slate-500">Deuda total</p>
-              <p class="text-xl font-bold text-slate-900 mt-1" id="dTotal">S/ 0.00</p>
-            </div>
-            <div class="bg-white rounded-3xl p-4 border border-slate-100 shadow-sm">
-              <p class="text-[11px] text-slate-500">Cuotas mínimas</p>
-              <p class="text-xl font-bold text-slate-900 mt-1" id="dMinimos">S/ 0.00</p>
-              <p class="text-[10px] text-slate-400">al mes</p>
-            </div>
-            <div class="bg-white rounded-3xl p-4 border border-slate-100 shadow-sm">
-              <p class="text-[11px] text-slate-500">Interés este mes</p>
-              <p class="text-xl font-bold text-rose-600 mt-1" id="dInteres">S/ 0.00</p>
-              <p class="text-[10px] text-slate-400">si no pagas nada</p>
-            </div>
-            <div class="bg-white rounded-3xl p-4 border border-slate-100 shadow-sm">
-              <p class="text-[11px] text-slate-500">Excedente mensual</p>
-              <p class="text-xl font-bold text-emerald-600 mt-1" id="dExcedente">S/ 0.00</p>
-              <p class="text-[10px] text-slate-400">promedio 3 meses</p>
-            </div>
-          </div>
-
-          <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm">
-            <h3 class="text-base font-bold text-slate-800 mb-1">¿Cuánto puedes pagar de más cada mes?</h3>
-            <p class="text-xs text-slate-500 mb-4">Este monto se suma a las cuotas mínimas y va completo a una sola deuda a la vez.</p>
-            <div class="flex flex-wrap items-end gap-3">
-              <div>
-                <label class="text-[11px] text-slate-500 block mb-1" for="pagoExtra">Pago extra (S/)</label>
-                <input type="number" step="10" min="0" id="pagoExtra" value="0" class="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm w-36">
-              </div>
-              <button onclick="usarExcedente()" class="text-xs font-semibold text-slate-600 border border-slate-200 rounded-xl px-3 py-2.5 hover:bg-slate-50">Usar mi excedente</button>
-              <button onclick="cargarPlan()" class="bg-slate-900 text-white text-sm font-semibold px-4 py-2.5 rounded-xl active:scale-95">Recalcular</button>
-              <span class="text-xs text-slate-500 ml-auto" id="dPagoMensual"></span>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="rounded-3xl p-5 border-2 border-emerald-300 bg-emerald-50">
-              <div class="flex items-center justify-between mb-2">
-                <h4 class="text-sm font-bold text-emerald-900">Avalancha · la más barata</h4>
-                <span class="text-[10px] font-bold bg-emerald-600 text-white px-2 py-0.5 rounded-full">Recomendada</span>
-              </div>
-              <p class="text-xs text-emerald-800 mb-3">Ataca primero la deuda con la tasa más alta.</p>
-              <p class="text-3xl font-bold text-emerald-900" id="avMeses">—</p>
-              <p class="text-xs text-emerald-800" id="avFecha"></p>
-              <p class="text-xs text-emerald-800 mt-2" id="avInteres"></p>
-            </div>
-            <div class="rounded-3xl p-5 border border-slate-200 bg-white">
-              <h4 class="text-sm font-bold text-slate-800 mb-2">Bola de nieve · la más motivadora</h4>
-              <p class="text-xs text-slate-600 mb-3">Ataca primero la deuda más pequeña.</p>
-              <p class="text-3xl font-bold text-slate-900" id="bnMeses">—</p>
-              <p class="text-xs text-slate-600" id="bnFecha"></p>
-              <p class="text-xs text-slate-600 mt-2" id="bnInteres"></p>
-            </div>
-          </div>
-
-          <div class="bg-slate-900 text-white rounded-3xl p-5" id="cajaAhorro">
-            <p class="text-sm" id="textoAhorro">Ajusta tu pago extra para ver cuánto tiempo e intereses te ahorras.</p>
-          </div>
-
-          <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm">
-            <h3 class="text-base font-bold text-slate-800 mb-1">Orden de ataque</h3>
-            <div id="ordenAtaque" class="space-y-3"></div>
-          </div>
-
-          <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm">
-            <h3 class="text-base font-bold text-slate-800 mb-4">Tus deudas</h3>
-            <div id="listaDeudas" class="space-y-3"></div>
-          </div>
-        </div>
-
-        <div class="xl:col-span-1 space-y-5">
-          <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="text-base font-bold text-slate-800" id="tituloFormDeuda">Agregar deuda</h3>
-              <button type="button" id="btnCancelarDeuda" onclick="limpiarFormDeuda()" class="hidden text-xs text-slate-500 hover:text-slate-800">Cancelar</button>
-            </div>
-            <form id="formDeuda" onsubmit="guardarDeuda(event)">
-              <input type="hidden" id="deudaOriginal">
-              <div class="mb-3">
-                <label class="text-xs font-semibold text-slate-500 mb-1 block" for="deudaNombre">Nombre</label>
-                <input type="text" id="deudaNombre" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm" placeholder="Ej: BBVA Tarjeta" required>
-              </div>
-              <div class="grid grid-cols-2 gap-3 mb-3">
-                <div>
-                  <label class="text-xs font-semibold text-slate-500 mb-1 block" for="deudaSaldo">Saldo (S/)</label>
-                  <input type="number" step="0.01" id="deudaSaldo" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm" required>
-                </div>
-                <div>
-                  <label class="text-xs font-semibold text-slate-500 mb-1 block" for="deudaTasa">Tasa anual %</label>
-                  <input type="number" step="0.01" id="deudaTasa" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm" placeholder="0">
-                </div>
-              </div>
-              <div class="grid grid-cols-2 gap-3 mb-3">
-                <div>
-                  <label class="text-xs font-semibold text-slate-500 mb-1 block" for="deudaMinimo">Cuota mínima</label>
-                  <input type="number" step="0.01" id="deudaMinimo" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm" required>
-                </div>
-                <div>
-                  <label class="text-xs font-semibold text-slate-500 mb-1 block" for="deudaDia">Día de pago</label>
-                  <input type="number" min="1" max="31" id="deudaDia" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm" placeholder="15">
-                </div>
-              </div>
-              <div class="mb-4">
-                <label class="text-xs font-semibold text-slate-500 mb-1 block" for="deudaCategoria">Categoría de gasto al pagar</label>
-                <select id="deudaCategoria" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm"></select>
-              </div>
-              <button type="submit" id="btnGuardarDeuda" class="w-full bg-slate-900 text-white font-semibold py-3 rounded-2xl active:scale-95">Guardar deuda</button>
-            </form>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- VISTA CATEGORÍAS -->
-    <section id="viewConfig" class="hidden p-4 lg:p-8">
-      <div class="mb-6">
-        <h2 class="text-2xl font-bold text-slate-900">Categorías</h2>
-        <p class="text-sm text-slate-500">Toca una categoría para editarla, o crea una nueva.</p>
-      </div>
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div class="lg:col-span-1">
-          <div class="lg:sticky lg:top-8 bg-white rounded-3xl p-5 border border-slate-100 shadow-sm">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="text-base font-bold text-slate-800" id="tituloFormCat">Nueva categoría</h3>
-              <button type="button" id="btnCancelarEdicion" onclick="limpiarFormCat()" class="hidden text-xs text-slate-500 hover:text-slate-800">Cancelar</button>
-            </div>
-            <div id="avisoEdicion" class="hidden mb-4 text-xs bg-amber-50 text-amber-800 border border-amber-200 rounded-xl px-3 py-2"></div>
-            <form id="formCategoria" onsubmit="guardarCategoria(event)">
-              <input type="hidden" id="confCatOriginal"><input type="hidden" id="confTipoOriginal">
-              <div class="mb-3">
-                <label class="text-xs font-semibold text-slate-500 mb-1 block" for="confTipo">Tipo</label>
-                <select id="confTipo" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm" onchange="togglePorTipo()">
-                  <option value="Gasto">Gasto</option><option value="Ingreso">Ingreso</option>
+          <div class="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm sticky top-24">
+            <h3 class="text-sm font-bold text-slate-800 mb-4" id="tituloFormCat">Agregar Categoría</h3>
+            
+            <form id="formCategoria" onsubmit="guardarCategoria(event)" class="space-y-4">
+              <div>
+                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 block">Clasificación</label>
+                <select id="confTipo" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold" onchange="togglePorTipo()">
+                  <option value="Gasto">Para Gastos</option><option value="Ingreso">Para Ingresos</option>
                 </select>
               </div>
-              <div class="mb-3" id="divConfGrupo">
-                <label class="text-xs font-semibold text-slate-500 mb-1 block" for="confGrupo">Grupo</label>
-                <input type="text" id="confGrupo" list="listaGrupos" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm" placeholder="Ej: 🏠 Hogar y Vida">
-                <datalist id="listaGrupos"></datalist>
+              <div id="divConfGrupo">
+                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 block">Grupo (Opcional)</label>
+                <input type="text" id="confGrupo" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium" placeholder="Ej: Hogar, Auto, etc.">
               </div>
-              <div class="mb-3">
-                <label class="text-xs font-semibold text-slate-500 mb-1 block" for="confCategoria">Nombre de la categoría</label>
-                <input type="text" id="confCategoria" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm" placeholder="Ej: Alquiler" required>
+              <div>
+                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 block">Nombre de categoría</label>
+                <input type="text" id="confCategoria" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold" placeholder="Ej: Supermercado" required>
               </div>
-              <div class="mb-5" id="divConfPresupuesto">
-                <label class="text-xs font-semibold text-slate-500 mb-1 block" for="confPresupuesto">Presupuesto mensual (S/)</label>
-                <input type="number" step="0.01" id="confPresupuesto" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm" placeholder="0">
+              <div id="divConfPresupuesto">
+                <label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 block">Tope Mensual (S/)</label>
+                <input type="number" step="0.01" id="confPresupuesto" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold" placeholder="0.00">
               </div>
-              <button type="submit" id="btnGuardarCat" class="w-full bg-slate-900 text-white font-semibold py-3 rounded-2xl active:scale-95">Guardar categoría</button>
+              <button type="submit" class="w-full bg-slate-900 active:scale-95 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all mt-2">Crear Categoría</button>
             </form>
           </div>
         </div>
-        <div class="lg:col-span-2 space-y-6" id="contenedorGrupos"></div>
+        <div class="lg:col-span-2" id="contenedorGrupos"></div>
       </div>
     </section>
   </main>
 </div>
 
-<!-- NAVEGACIÓN MÓVIL -->
-<nav class="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-slate-200 grid grid-cols-4" id="navMovil">
-  <button data-vista="dash" class="nav-item activo py-3 text-[10px] font-semibold text-slate-800 flex flex-col items-center gap-1"><i class="fa-solid fa-chart-pie"></i> Panel</button>
-  <button data-vista="registro" class="nav-item py-3 text-[10px] font-medium text-slate-500 flex flex-col items-center gap-1"><i class="fa-solid fa-pen-to-square"></i> Registrar</button>
-  <button data-vista="deudas" class="nav-item py-3 text-[10px] font-medium text-slate-500 flex flex-col items-center gap-1"><i class="fa-solid fa-hand-holding-dollar"></i> Deudas</button>
-  <button data-vista="config" class="nav-item py-3 text-[10px] font-medium text-slate-500 flex flex-col items-center gap-1"><i class="fa-solid fa-sliders"></i> Categorías</button>
+<!-- NAVEGACIÓN INFERIOR MÓVIL OPTIMIZADA (APP-LIKE) -->
+<nav class="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-xl border-t border-slate-200/80 flex justify-around pb-[env(safe-area-inset-bottom)]" id="navMovil">
+  <button data-vista="dash" class="nav-item activo flex-1 py-3.5 text-[10px] font-bold text-slate-400 flex flex-col items-center gap-1.5 transition-colors">
+    <i class="fa-solid fa-chart-pie text-lg"></i> <span>Panel</span>
+  </button>
+  <button data-vista="registro" class="nav-item flex-1 py-3.5 text-[10px] font-bold text-slate-400 flex flex-col items-center gap-1.5 transition-colors">
+    <i class="fa-solid fa-circle-plus text-lg"></i> <span>Registrar</span>
+  </button>
+  <button data-vista="deudas" class="nav-item flex-1 py-3.5 text-[10px] font-bold text-slate-400 flex flex-col items-center gap-1.5 transition-colors">
+    <i class="fa-solid fa-credit-card text-lg"></i> <span>Créditos</span>
+  </button>
+  <button data-vista="config" class="nav-item flex-1 py-3.5 text-[10px] font-bold text-slate-400 flex flex-col items-center gap-1.5 transition-colors">
+    <i class="fa-solid fa-sliders text-lg"></i> <span>Ajustes</span>
+  </button>
 </nav>
 
 <!-- MODAL PARA EDITAR MOVIMIENTOS -->
-<div id="modalEdicionMovimiento" class="fixed inset-0 z-50 hidden items-center justify-center">
-  <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onclick="cerrarModalEdicion()"></div>
-  <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm m-4 relative z-10 overflow-hidden transform transition-all">
+<div id="modalEdicionMovimiento" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+  <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" onclick="cerrarModalEdicion()"></div>
+  <div class="bg-white rounded-3xl shadow-2xl w-full max-w-sm relative z-10 overflow-hidden transform transition-all animate-fade-in">
     <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-      <h3 class="text-sm font-bold text-slate-800"><i class="fa-solid fa-pen text-sky-500 mr-2"></i> Editar registro</h3>
-      <button onclick="cerrarModalEdicion()" class="text-slate-400 hover:text-slate-700 w-6 h-6 flex items-center justify-center rounded-full hover:bg-slate-200 transition-colors"><i class="fa-solid fa-xmark"></i></button>
+      <h3 class="text-sm font-bold text-slate-800"><i class="fa-solid fa-pen text-sky-500 mr-2"></i> Editar Registro</h3>
+      <button onclick="cerrarModalEdicion()" class="text-slate-400 hover:text-slate-700 w-8 h-8 flex items-center justify-center rounded-full bg-white border border-slate-200 active:scale-90 transition-all"><i class="fa-solid fa-xmark"></i></button>
     </div>
-    <form id="formEdicionMov" onsubmit="enviarEdicionMovimiento(event)" class="p-5">
+    <form id="formEdicionMov" onsubmit="enviarEdicionMovimiento(event)" class="p-5 space-y-4">
       <input type="hidden" id="editMovId"><input type="hidden" id="editMovTipo">
-      <div class="mb-4">
-        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Monto (S/)</label>
+      <div>
+        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Monto Modificado (S/)</label>
         <input type="number" step="0.01" id="editMovMonto" class="w-full text-2xl font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none" required>
       </div>
-      <div class="grid grid-cols-2 gap-3 mb-4">
+      <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Fecha</label>
-          <input type="date" id="editMovFecha" class="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-sm font-medium" required>
+          <input type="date" id="editMovFecha" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold" required>
         </div>
         <div>
           <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Responsable</label>
-          <select id="editMovResponsable" class="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-sm">
+          <select id="editMovResponsable" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold">
             <option value="Jhonathan">Jhonathan</option><option value="Sindy">Sindy</option>
           </select>
         </div>
       </div>
-      <div class="mb-4">
+      <div>
         <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Categoría</label>
-        <select id="editMovCategoria" class="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-sm" required></select>
+        <select id="editMovCategoria" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold" required></select>
       </div>
-      <div class="mb-6">
+      <div class="mb-2">
         <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Descripción</label>
-        <input type="text" id="editMovDetalle" class="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-sm">
+        <input type="text" id="editMovDetalle" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium">
       </div>
-      <button type="submit" id="btnGuardarEditMov" class="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-3.5 rounded-2xl shadow-lg transition-all">Guardar cambios</button>
+      <button type="submit" id="btnGuardarEditMov" class="w-full bg-sky-500 active:scale-95 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-sky-500/20 transition-all mt-2">Guardar cambios</button>
     </form>
   </div>
 </div>
 
-<div id="toast" class="fixed bottom-24 lg:bottom-8 right-4 z-50 hidden max-w-xs rounded-2xl px-4 py-3 text-sm font-medium shadow-xl"></div>
+<div id="toast" class="fixed hidden z-50"></div>
 
 <script type="module" src="/main.js"></script>
 </body>
