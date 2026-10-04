@@ -385,7 +385,7 @@ function renderHeaderUsuario() {
     </button>`;
 }
 
-/* LÓGICA PRINCIPAL Y REESTRUCTURACIÓN DE DISEÑO PARA PC */
+/* LÓGICA PRINCIPAL Y REESTRUCTURACIÓN DE DISEÑO LIMPIA */
 function procesarYRenderizarDashboard() {
   const filtro = calcularRango();
   const etiq = document.getElementById('etiquetaPeriodo');
@@ -502,7 +502,7 @@ function procesarYRenderizarDashboard() {
     elRes.className = 'text-[10px] mt-1 font-bold ' + (resPer >= 0 ? 'text-emerald-600' : 'text-rose-600');
   }
 
-  // 3. ORGANIZACIÓN EN 2 NIVELES (FILA SUPERIOR EXCLUSIVA DE 4 TARJETAS Y FILA INFERIOR 2 COLUMNAS)
+  // 3. ORGANIZACIÓN ÚNICA SIN DUPLICADOS EN EL DOM
   const viewDash = document.getElementById('viewDash');
   if (viewDash) {
       let mainContainer = document.getElementById('dashboardMainGrid');
@@ -511,13 +511,13 @@ function procesarYRenderizarDashboard() {
           mainContainer.id = 'dashboardMainGrid';
           mainContainer.className = 'space-y-6 mt-4';
           
-          while (viewDash.children.length > 1) {
-              mainContainer.appendChild(viewDash.children[1]);
-          }
+          // Movemos los elementos del dashboard que no sean el header de usuario o el selector de fechas
+          const elementosMover = Array.from(viewDash.children).filter(el => el.id !== 'headerDashUsuario' && el.id !== 'panelFondosCreditos');
+          elementosMover.forEach(el => mainContainer.appendChild(el));
           viewDash.appendChild(mainContainer);
       }
 
-      // Fila Superior: Exactamente las 4 tarjetas principales
+      // Fila Superior (4 Tarjetas exactas)
       let filaSuperior = document.getElementById('dashFilaSuperior');
       if (!filaSuperior) {
           filaSuperior = document.createElement('div');
@@ -526,7 +526,7 @@ function procesarYRenderizarDashboard() {
           mainContainer.prepend(filaSuperior);
       }
 
-      // Tarjeta 1: Saldo Histórico
+      // Asegurar tarjetas en la fila superior
       let cardSaldo = document.getElementById('cardSaldoHistorico');
       if (!cardSaldo) {
           cardSaldo = document.createElement('div');
@@ -551,7 +551,6 @@ function procesarYRenderizarDashboard() {
           filaSuperior.appendChild(cardSaldo);
       }
 
-      // Tarjeta 2: Ingresos por Categoría
       let cardIngCat = document.getElementById('cardIngresosCat');
       if (!cardIngCat) {
           cardIngCat = document.createElement('div');
@@ -563,7 +562,6 @@ function procesarYRenderizarDashboard() {
           filaSuperior.appendChild(cardIngCat);
       }
 
-      // Tarjeta 3: Ingresos Periodo
       let cardIngPer = document.getElementById('cardIngresosPeriodo');
       if (!cardIngPer) {
           cardIngPer = document.createElement('div');
@@ -582,7 +580,6 @@ function procesarYRenderizarDashboard() {
           filaSuperior.appendChild(cardIngPer);
       }
 
-      // Tarjeta 4: Gastos Periodo
       let cardGasPer = document.getElementById('cardGastosPeriodo');
       if (!cardGasPer) {
           cardGasPer = document.createElement('div');
@@ -600,7 +597,7 @@ function procesarYRenderizarDashboard() {
           filaSuperior.appendChild(cardGasPer);
       }
 
-      // Fila Inferior: 2 Columnas amplias (Izquierda: Presupuestos y Grupos / Derecha: Movimientos Recientes)
+      // Fila Inferior (2 Columnas: Izquierda Presupuestos/Grupos, Derecha Movimientos Recientes)
       let filaInferior = document.getElementById('dashFilaInferior');
       if (!filaInferior) {
           filaInferior = document.createElement('div');
@@ -625,6 +622,7 @@ function procesarYRenderizarDashboard() {
           filaInferior.appendChild(colDer);
       }
 
+      // Recolocar los paneles originales dentro de sus columnas sin duplicarlos
       const boxPresupuestos = document.getElementById('panelPresupuestos')?.closest('.bg-white');
       const boxGrupos = document.getElementById('panelGrupos')?.closest('.bg-white');
       const boxMovimientos = document.getElementById('panelMovimientos')?.closest('.bg-white');
