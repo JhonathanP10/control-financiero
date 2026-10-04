@@ -1039,7 +1039,7 @@ window.togglePorTipo = function() {
   const confTipo = document.getElementById('confTipo');
   if(!confTipo) return;
   const esIngreso = confTipo.value === 'Ingreso';
-  if(document.getElementById('divConfGrupo')) document.getElementById('divConfGrupo').style.display = esIngresa ? 'none' : 'block';
+  if(document.getElementById('divConfGrupo')) document.getElementById('divConfGrupo').style.display = esIngreso ? 'none' : 'block';
   if(document.getElementById('divConfPresupuesto')) document.getElementById('divConfPresupuesto').style.display = esIngreso ? 'none' : 'block';
 }
 
