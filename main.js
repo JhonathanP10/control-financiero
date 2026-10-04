@@ -500,7 +500,7 @@ function procesarYRenderizarDashboard() {
   if(document.getElementById('periodoJhoIn')) document.getElementById('periodoJhoIn').innerText = 'Jho: ' + S(ingresosPorResp['Jhonathan'] || 0);
   if(document.getElementById('periodoSinIn')) document.getElementById('periodoSinIn').innerText = 'Sin: ' + S(ingresosPorResp['Sindy'] || 0);
 
-  // 3. RENDERIZAR NUEVA TARJETA: INGRESOS POR CATEGORÍA
+  // 3. RENDERIZAR TARJETA: INGRESOS POR CATEGORÍA
   const dashView = document.getElementById('viewDash');
   if (dashView) {
     let tarjetaIngCat = document.getElementById('cardIngresosPorCategoria');
@@ -509,7 +509,6 @@ function procesarYRenderizarDashboard() {
       tarjetaIngCat.id = 'cardIngresosPorCategoria';
       tarjetaIngCat.className = 'bg-white rounded-3xl border border-slate-200/80 p-4 shadow-sm mb-4 w-full';
       
-      // Intentamos ubicarla debajo del resumen de ingresos/periodo o antes del panel de presupuestos
       const panelPres = document.getElementById('panelPresupuestos')?.closest('.bg-white') || document.getElementById('panelPresupuestos');
       if (panelPres) {
         dashView.insertBefore(tarjetaIngCat, panelPres);
@@ -1014,6 +1013,9 @@ function renderConfiguracion() {
   cont.innerHTML = html;
 }
 
+window.guardarGasto = window.enviarGasto;
+window.guardarIngreso = window.enviarIngreso;
+
 window.guardarCategoria = async function(e) {
   if(e) e.preventDefault();
   const getE = i => document.getElementById(i);
@@ -1037,7 +1039,7 @@ window.togglePorTipo = function() {
   const confTipo = document.getElementById('confTipo');
   if(!confTipo) return;
   const esIngreso = confTipo.value === 'Ingreso';
-  if(document.getElementById('divConfGrupo')) document.getElementById('divConfGrupo').style.display = esIngreso ? 'none' : 'block';
+  if(document.getElementById('divConfGrupo')) document.getElementById('divConfGrupo').style.display = esIngresa ? 'none' : 'block';
   if(document.getElementById('divConfPresupuesto')) document.getElementById('divConfPresupuesto').style.display = esIngreso ? 'none' : 'block';
 }
 
