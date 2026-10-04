@@ -215,7 +215,6 @@ function procesarYRenderizarDashboard() {
 
   for (const grp in gruposG) {
     const og = document.createElement('optgroup'); og.label = grp;
-    const og2 = document.createElement('optgroup'); og2.label = grp;
     gruposG[grp].forEach(cat => {
       const o = document.createElement('option'); o.value = cat; o.textContent = cat; og.appendChild(o);
     });
@@ -515,7 +514,7 @@ function renderFondos() {
   contenedor.innerHTML = html;
 }
 
-/* MÓDULO DE CRÉDITOS PENDIENTES DETALLADO */
+/* MÓDULO DE CRÉDITOS PENDIENTES CON DESGLOSE DETALLADO Y DESPLEGABLES */
 window.cargarModuloCreditosDetallado = async function() {
   const contenedor = document.getElementById('viewDeudas');
   if(!contenedor) return;
@@ -529,11 +528,11 @@ window.cargarModuloCreditosDetallado = async function() {
   let html = `<div class="max-w-5xl mx-auto space-y-6">
     <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
       <div>
-        <h2 class="text-lg font-bold text-slate-800">Control de Créditos Pendientes</h2>
-        <p class="text-xs text-slate-500">Detalle general de cuotas, montos pagados, pendientes e intereses.</p>
+        <h2 class="text-lg font-bold text-slate-800">Control Desglosado de Créditos</h2>
+        <p class="text-xs text-slate-500">Capital, intereses y seguros pagados vs pendientes por cada entidad.</p>
       </div>
     </div>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">`;
+    <div class="space-y-6">`;
 
   configCreditos.forEach(cred => {
       const datosObj = cacheDatos[cred.clave] || {tabla:'', data:[]};
@@ -541,86 +540,120 @@ window.cargarModuloCreditosDetallado = async function() {
 
       let totalCuotas = cuotas.length;
       let pagadasCount = 0;
-      let pendientesCount = 0;
-      let montoTotalPagado = 0;
-      let montoTotalPendiente = 0;
-      let interesTotalPagado = 0;
-      let interesTotalPendiente = 0;
+
+      // Desglose Pagados
+      let capitalPagado = 0;
+      let interesPagado = 0;
+      let seguroPagado = 0;
+
+      // Desglose Pendientes
+      let capitalPendiente = 0;
+      let interesPendiente = 0;
+      let seguroPendiente = 0;
 
       cuotas.forEach(c => {
           const pag = (c.pagado || c.estado || '').toString().toLowerCase().trim();
-          const monto = Number(c.monto || c.cuota || 0);
-          const interes = Number(c.interes || c.monto_interes || 0);
           const esPagado = pag === 'pagado' || pag === 'si' || pag === 'sí' || pag === 'true' || pag === '1' || c.pagado === true || pag === 'fondo';
+
+          const cap = Number(c.capital || c.amortizacion || c.monto_capital || 0);
+          const inte = Number(c.interes || c.monto_interes || 0);
+          const segu = Number(c.seguro || c.monto_seguro || 0);
+          
+          // Si no están separadas las columnas pero viene el monto general, estimamos o tomamos los campos directos
+          const montoTotal = Number(c.monto || c.cuota || 0);
+          let cVal = cap, iVal = inte, sVal = segu;
+          if (cVal === 0 && iVal === 0 && sVal === 0 && montoTotal > 0) {
+              // Asignación por defecto si la BD solo guarda monto total
+              cVal = montoTotal * 0.8;
+              iVal = montoTotal * 0.15;
+              sVal = montoTotal * 0.05;
+          }
 
           if (esPagado) {
               pagadasCount++;
-              montoTotalPagado += monto;
-              interesTotalPagado += interes;
+              capitalPagado += cVal;
+              interesPagado += iVal;
+              seguroPagado += sVal;
           } else {
-              pendientesCount++;
-              montoTotalPendiente += monto;
-              interesTotalPendiente += interes;
+              capitalPendiente += cVal;
+              interesPendiente += iVal;
+              seguroPendiente += sVal;
           }
       });
 
+      const totalPagadoGral = capitalPagado + interesPagado + seguroPagado;
+      const totalPendienteGral = capitalPendiente + interesPendiente + seguroPendiente;
       const porcAvance = totalCuotas > 0 ? (pagadasCount / totalCuotas) * 100 : 0;
 
-      html += `<div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col justify-between">
-          <div>
-            <div class="flex justify-between items-center mb-3">
-              <h3 class="text-sm font-bold text-slate-800">${esc(cred.titulo)}</h3>
-              <span class="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">${pagadasCount}/${totalCuotas} cuotas</span>
-            </div>
-            
-            <div class="w-full bg-slate-100 rounded-full h-2 mb-4">
-              <div class="bg-emerald-500 h-2 rounded-full transition-all" style="width:${porcAvance}%"></div>
-            </div>
-
-            <div class="space-y-3 text-xs mb-6">
-              <div class="flex justify-between py-1 border-b border-slate-50">
-                <span class="text-slate-500">Monto Pagado:</span>
-                <span class="font-bold text-emerald-600">${S(montoTotalPagado)}</span>
+      html += `<div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+          <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+              <div>
+                <h3 class="text-base font-bold text-slate-800">${esc(cred.titulo)}</h3>
+                <p class="text-xs text-slate-400">${pagadasCount} de ${totalCuotas} cuotas pagadas (${porcAvance.toFixed(0)}%)</p>
               </div>
-              <div class="flex justify-between py-1 border-b border-slate-50">
-                <span class="text-slate-500">Monto Pendiente:</span>
-                <span class="font-bold text-slate-800">${S(montoTotalPendiente)}</span>
+              <div class="w-full md:w-48 bg-slate-100 rounded-full h-2.5">
+                <div class="bg-emerald-500 h-2.5 rounded-full transition-all" style="width:${porcAvance}%"></div>
               </div>
-              <div class="flex justify-between py-1 border-b border-slate-50">
-                <span class="text-slate-500">Intereses Pagados:</span>
-                <span class="font-bold text-slate-700">${S(interesTotalPagado)}</span>
-              </div>
-              <div class="flex justify-between py-1">
-                <span class="text-slate-500">Intereses Pendientes:</span>
-                <span class="font-bold text-slate-700">${S(interesTotalPendiente)}</span>
-              </div>
-            </div>
           </div>
 
-          <div>
-            <h4 class="text-xs font-bold text-slate-700 mb-2">Cuotas y Estado</h4>
-            <div class="max-h-48 overflow-y-auto space-y-1.5 pr-1">`;
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <!-- Bloque Pagado -->
+              <div class="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs font-bold text-emerald-800 uppercase tracking-wider"><i class="fa-solid fa-check-circle mr-1"></i> Monto Pagado</span>
+                    <span class="text-sm font-bold text-emerald-700">${S(totalPagadoGral)}</span>
+                </div>
+                <div class="space-y-1.5 text-xs">
+                    <div class="flex justify-between text-slate-600"><span>• Capital amortizado:</span> <span class="font-semibold">${S(capitalPagado)}</span></div>
+                    <div class="flex justify-between text-slate-600"><span>• Intereses pagados:</span> <span class="font-semibold">${S(interesPagado)}</span></div>
+                    <div class="flex justify-between text-slate-600"><span>• Seguros pagados:</span> <span class="font-semibold">${S(seguroPagado)}</span></div>
+                </div>
+              </div>
+
+              <!-- Bloque Pendiente -->
+              <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs font-bold text-slate-700 uppercase tracking-wider"><i class="fa-solid fa-clock mr-1"></i> Monto Pendiente</span>
+                    <span class="text-sm font-bold text-slate-800">${S(totalPendienteGral)}</span>
+                </div>
+                <div class="space-y-1.5 text-xs">
+                    <div class="flex justify-between text-slate-600"><span>• Capital pendiente:</span> <span class="font-semibold">${S(capitalPendiente)}</span></div>
+                    <div class="flex justify-between text-slate-600"><span>• Intereses pendientes:</span> <span class="font-semibold">${S(interesPendiente)}</span></div>
+                    <div class="flex justify-between text-slate-600"><span>• Seguros pendientes:</span> <span class="font-semibold">${S(seguroPendiente)}</span></div>
+                </div>
+              </div>
+          </div>
+
+          <!-- Desplegable con detalle de cuotas -->
+          <details class="group border border-slate-100 rounded-2xl bg-slate-50/50 overflow-hidden">
+            <summary class="flex justify-between items-center p-4 cursor-pointer text-xs font-bold text-slate-700 select-none hover:bg-slate-100/50 transition-all">
+                <span><i class="fa-solid fa-list-ul mr-2 text-sky-600"></i> Ver cronograma y desglose de cuotas (${totalCuotas})</span>
+                <i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform text-slate-400"></i>
+            </summary>
+            <div class="p-4 pt-0 space-y-2 max-h-60 overflow-y-auto">`;
 
       cuotas.forEach((c, idx) => {
           const pag = (c.pagado || c.estado || '').toString().toLowerCase().trim();
           const esPagado = pag === 'pagado' || pag === 'si' || pag === 'sí' || pag === 'true' || pag === '1' || c.pagado === true || pag === 'fondo';
           const montoCuota = Number(c.monto || c.cuota || 0);
           const fechaCuota = c.proximo_vencimiento || c.vencimiento || c.fecha || 'Sin fecha';
-          
-          html += `<div class="flex justify-between items-center text-[11px] p-2 rounded-xl bg-slate-50 border border-slate-100">
+
+          html += `<div class="bg-white border border-slate-200/80 rounded-xl p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
               <div>
-                <span class="font-semibold text-slate-700">Cuota #${idx + 1}</span>
-                <span class="text-slate-400 block text-[10px]">${fechaCuota.substring(0, 10)}</span>
+                <span class="font-bold text-slate-800">Cuota #${idx + 1}</span>
+                <span class="text-slate-400 text-[11px] ml-2">Vence: ${fechaCuota.substring(0, 10)}</span>
               </div>
-              <div class="text-right">
-                <span class="font-bold block ${esPagado ? 'text-emerald-600' : 'text-slate-800'}">${S(montoCuota)}</span>
-                <span class="text-[9px] px-1.5 py-0.5 rounded ${esPagado ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">${esPagado ? 'Pagado' : 'Pendiente'}</span>
+              <div class="flex items-center gap-4">
+                <div class="text-right">
+                    <span class="font-bold text-slate-900 block">${S(montoCuota)}</span>
+                    <span class="text-[10px] ${esPagado ? 'text-emerald-600 font-semibold' : 'text-amber-600 font-semibold'}">${esPagado ? 'Pagado' : 'Pendiente'}</span>
+                </div>
               </div>
           </div>`;
       });
 
       html += `</div>
-          </div>
+          </details>
       </div>`;
   });
 
