@@ -187,10 +187,7 @@ function mostrarVista(vista) {
   const mapa = { dash: 'viewDash', registro: 'viewRegistro', creditos: 'viewDeudas', config: 'viewConfig' };
   Object.keys(mapa).forEach(v => {
     const el = document.getElementById(mapa[v]);
-    if(el) {
-      el.classList.toggle('hidden', v !== vista);
-      if (v === vista) el.classList.add('pb-28'); // Padding inferior para menú móvil
-    }
+    if(el) el.classList.toggle('hidden', v !== vista);
   });
   document.querySelectorAll('.nav-item').forEach(b => {
     const activo = b.dataset.vista === vista || (vista === 'creditos' && b.dataset.vista === 'deudas');
@@ -203,10 +200,6 @@ function mostrarVista(vista) {
   
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (vista === 'creditos') cargarModuloCreditosDetallado();
-  if (vista === 'registro') setTimeout(() => {
-      const g = document.getElementById('montoGasto');
-      if(g) g.focus();
-  }, 150);
 }
 
 document.querySelectorAll('.nav-item').forEach(b => {
@@ -224,9 +217,9 @@ window.cambiarTab = function(tipo) {
   document.querySelectorAll('button[onclick*="cambiarTab"]').forEach(btn => {
     const esBtnIngreso = btn.textContent.toLowerCase().includes('ingreso');
     if (esIngreso === esBtnIngreso) {
-      btn.className = "flex-1 py-2.5 text-xs font-bold rounded-2xl bg-white text-slate-900 shadow-sm transition-all";
+      btn.className = "flex-1 py-2.5 text-xs font-bold rounded-xl bg-white shadow-sm text-slate-800 transition-all";
     } else {
-      btn.className = "flex-1 py-2.5 text-xs font-semibold rounded-2xl text-slate-500 hover:text-slate-800 transition-all";
+      btn.className = "flex-1 py-2.5 text-xs font-bold rounded-xl text-slate-500 hover:text-slate-800 transition-all";
     }
   });
 
@@ -292,9 +285,9 @@ window.cargarDashboard = async function() {
     cacheDatos.ingresos = (!resI.error && resI.data) ? resI.data.map(normalizar) : [];
     cacheDatos.configuracion = (!resC.error && resC.data) ? resC.data.map(normalizar) : [];
 
-    cacheDatos.bcp = await fetchSafe('bcp_credito', 'bcp');
-    cacheDatos.bbva_credito = await fetchSafe('bbva_credito', 'bbva');
-    cacheDatos.bbva_tarjeta = await fetchSafe('bbva_tarjeta', 'bbvatarjeta');
+    cacheDatos.bcp = await fetchSafe('bcp_credito', 'bcp', 'bcpcredito');
+    cacheDatos.bbva_credito = await fetchSafe('bbva_credito', 'bbvacredito', 'bbva');
+    cacheDatos.bbva_tarjeta = await fetchSafe('bbva_tarjeta', 'bbvatarjeta', 'tarjeta_bbva');
 
     procesarYRenderizarDashboard();
   } catch (err) {
@@ -334,10 +327,11 @@ function renderHeaderUsuario() {
       </div>
     </div>
     <button onclick="window.cerrarSesion()" class="bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-600 font-bold px-3.5 py-2 rounded-xl text-xs transition-all flex items-center gap-1.5">
-      <i class="fa-solid fa-right-from-bracket"></i> <span>Salir</span>
+      <i class="fa-solid fa-right-from-bracket"></i> <span class="hidden sm:inline">Salir</span>
     </button>`;
 }
 
+/* LÓGICA CORE - CORREGIDA Y RESTAURADA (CÁLCULO DEL MES Y PRESUPUESTOS) */
 function procesarYRenderizarDashboard() {
   const filtro = calcularRango();
   const etiq = document.getElementById('etiquetaPeriodo');
@@ -348,15 +342,16 @@ function procesarYRenderizarDashboard() {
 
   const selGasto = document.getElementById('categoriaGasto');
   const selIng = document.getElementById('categoriaIngreso');
-  
   if(selGasto) selGasto.innerHTML = '';
   if(selIng) selIng.innerHTML = '';
 
   const gruposG = {};
+  const grupoDeCat = {};
   cacheDatos.configuracion.forEach(c => {
     if (c.tipo === 'Gasto' || c.tipo === 'gasto') {
       const grp = c.grupo || 'General';
       (gruposG[grp] = gruposG[grp] || []).push(c.categoria);
+      grupoDeCat[c.categoria] = grp;
     }
   });
 
@@ -373,63 +368,171 @@ function procesarYRenderizarDashboard() {
     if(selIng) selIng.appendChild(o);
   });
 
-  let totalIngresos = cacheDatos.ingresos.reduce((s, x) => s + (Number(x.monto) || 0), 0);
-  let totalGastos = cacheDatos.gastos.reduce((s, x) => s + (Number(x.monto) || 0), 0);
+  // 1. CALCULOS GLOBALES HISTÓRICOS
+  let totalIngresos = 0, totalGastos = 0;
+  const statsResp = { 'Jhonathan': { in: 0, out: 0 }, 'Sindy': { in: 0, out: 0 } };
+
+  cacheDatos.ingresos.forEach(i => {
+    const m = Number(i.monto) || 0;
+    totalIngresos += m;
+    const resp = i.responsable || 'Jhonathan';
+    if(statsResp[resp]) statsResp[resp].in += m;
+  });
+
+  cacheDatos.gastos.forEach(g => {
+    const m = Number(g.monto) || 0;
+    totalGastos += m;
+    const resp = g.responsable || 'Jhonathan';
+    if(statsResp[resp]) statsResp[resp].out += m;
+  });
+
   let saldoHist = totalIngresos - totalGastos;
 
   if(document.getElementById('saldoDisponible')) document.getElementById('saldoDisponible').innerText = S(saldoHist);
   if(document.getElementById('sbSaldo')) document.getElementById('sbSaldo').innerText = S(saldoHist);
-  if(document.getElementById('sbIngresos')) document.getElementById('sbIngresos').innerText = totalIngresos.toFixed(2);
-  if(document.getElementById('sbGastos')) document.getElementById('sbGastos').innerText = totalGastos.toFixed(2);
+  if(document.getElementById('sbSaldoMovil')) document.getElementById('sbSaldoMovil').innerText = S(saldoHist);
+  if(document.getElementById('sbIngresos')) document.getElementById('sbIngresos').innerText = totalIngresos.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if(document.getElementById('sbGastos')) document.getElementById('sbGastos').innerText = totalGastos.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const statsResp = { 'Jhonathan': { in: 0, out: 0 }, 'Sindy': { in: 0, out: 0 } };
-  cacheDatos.ingresos.forEach(i => {
-    const resp = i.responsable || 'Jhonathan';
-    if(statsResp[resp]) statsResp[resp].in += Number(i.monto) || 0;
-  });
-  cacheDatos.gastos.forEach(g => {
-    const resp = g.responsable || 'Jhonathan';
-    if(statsResp[resp]) statsResp[resp].out += Number(g.monto) || 0;
-  });
-
-  if(document.getElementById('jhoIngresos')) document.getElementById('jhoIngresos').innerText = S(statsResp['Jhonathan'].in);
-  if(document.getElementById('jhoGastos')) document.getElementById('jhoGastos').innerText = S(statsResp['Jhonathan'].out);
   if(document.getElementById('jhoSaldo')) document.getElementById('jhoSaldo').innerText = S(statsResp['Jhonathan'].in - statsResp['Jhonathan'].out);
-  if(document.getElementById('sinIngresos')) document.getElementById('sinIngresos').innerText = S(statsResp['Sindy'].in);
-  if(document.getElementById('sinGastos')) document.getElementById('sinGastos').innerText = S(statsResp['Sindy'].out);
   if(document.getElementById('sinSaldo')) document.getElementById('sinSaldo').innerText = S(statsResp['Sindy'].in - statsResp['Sindy'].out);
 
-  let movimientos = [];
-  cacheDatos.ingresos.forEach(i => movimientos.push({ id: i.id, tipo: 'Ingreso', fecha: i.fecha, categoria: i.categoria, monto: Number(i.monto)||0, responsable: i.responsable||'Jhonathan', detalle: i.comentario||'' }));
-  cacheDatos.gastos.forEach(g => movimientos.push({ id: g.id, tipo: 'Gasto', fecha: g.fecha, categoria: g.categoria, monto: Number(g.monto)||0, responsable: g.responsable||'Jhonathan', detalle: g.descripcion||'' }));
+  // 2. CÁLCULOS DEL PERIODO (FILTRO DE FECHA)
+  const fDesdeStr = filtro.desde;
+  const fHastaStr = filtro.hasta;
 
+  let ingresosPeriodo = 0, gastosPeriodo = 0;
+  let gastosPorCat = {}, gastosPorGrupo = {};
+  let ingresosPorResp = { 'Jhonathan': 0, 'Sindy': 0 };
+  let movimientos = [];
+
+  cacheDatos.ingresos.forEach(i => {
+    const fStr = i.fecha ? i.fecha.substring(0, 10) : '';
+    const m = Number(i.monto) || 0;
+    const resp = i.responsable || 'Jhonathan';
+    
+    if (fStr >= fDesdeStr && fStr <= fHastaStr) {
+      ingresosPeriodo += m;
+      if(ingresosPorResp[resp] !== undefined) ingresosPorResp[resp] += m;
+    }
+    movimientos.push({ id: i.id, tipo: 'Ingreso', fecha: i.fecha, categoria: i.categoria, monto: m, responsable: resp, detalle: i.comentario || i.descripcion || '' });
+  });
+
+  cacheDatos.gastos.forEach(g => {
+    const fStr = g.fecha ? g.fecha.substring(0, 10) : '';
+    const m = Number(g.monto) || 0;
+    const resp = g.responsable || 'Jhonathan';
+    
+    if (fStr >= fDesdeStr && fStr <= fHastaStr) {
+      gastosPeriodo += m;
+      gastosPorCat[g.categoria] = (gastosPorCat[g.categoria] || 0) + m;
+      const grp = grupoDeCat[g.categoria] || 'General';
+      gastosPorGrupo[grp] = (gastosPorGrupo[grp] || 0) + m;
+    }
+    movimientos.push({ id: g.id, tipo: 'Gasto', fecha: g.fecha, categoria: g.categoria, monto: m, responsable: resp, detalle: g.descripcion || '' });
+  });
+
+  if(document.getElementById('periodoIngresos')) document.getElementById('periodoIngresos').innerText = S(ingresosPeriodo);
+  if(document.getElementById('periodoGastos')) document.getElementById('periodoGastos').innerText = S(gastosPeriodo);
+  if(document.getElementById('periodoJhoIn')) document.getElementById('periodoJhoIn').innerText = 'Jho: ' + S(ingresosPorResp['Jhonathan'] || 0);
+  if(document.getElementById('periodoSinIn')) document.getElementById('periodoSinIn').innerText = 'Sin: ' + S(ingresosPorResp['Sindy'] || 0);
+
+  const resPer = ingresosPeriodo - gastosPeriodo;
+  const elRes = document.getElementById('periodoResultado');
+  if(elRes) {
+    elRes.innerText = (resPer >= 0 ? 'Te quedan ' : 'Vas sobre-gastado ') + S(Math.abs(resPer));
+    elRes.className = 'text-[10px] mt-1 font-bold ' + (resPer >= 0 ? 'text-emerald-600' : 'text-rose-600');
+  }
+
+  // 3. RENDERIZAR PRESUPUESTOS Y BARRAS
+  let totalTopeGlobal = 0, totalGastadoGlobal = 0;
+  const panelPres = document.getElementById('panelPresupuestos');
+  if(panelPres) {
+    panelPres.innerHTML = '';
+    cacheDatos.configuracion.filter(c => (c.tipo === 'Gasto' || c.tipo === 'gasto') && Number(c.presupuesto) > 0).forEach(c => {
+      const tope = Number(c.presupuesto);
+      const gastado = gastosPorCat[c.categoria] || 0;
+      totalTopeGlobal += tope; 
+      totalGastadoGlobal += gastado;
+      const porc = tope > 0 ? (gastado / tope) * 100 : 0;
+      const color = porc > 100 ? 'bg-rose-500' : (porc > 75 ? 'bg-amber-500' : 'bg-sky-500');
+      
+      panelPres.innerHTML += `<div>
+        <div class="flex justify-between items-end mb-1">
+          <span class="text-[11px] font-bold text-slate-700">${esc(c.categoria)}</span>
+          <span class="text-[10px] text-slate-500 font-medium">${S(gastado)} / ${S(tope)}</span>
+        </div>
+        <div class="w-full bg-slate-100 rounded-full h-1.5"><div class="${color} h-1.5 rounded-full transition-all" style="width:${Math.min(porc, 100)}%"></div></div>
+      </div>`;
+    });
+    if(panelPres.innerHTML === '') panelPres.innerHTML = '<p class="text-xs text-slate-400">No hay presupuestos definidos.</p>';
+  }
+
+  if(document.getElementById('totalPresupuestos')) {
+      document.getElementById('totalPresupuestos').innerText = totalGastadoGlobal.toLocaleString('es-PE', {minimumFractionDigits:2}) + ' / ' + totalTopeGlobal.toLocaleString('es-PE', {minimumFractionDigits:2});
+  }
+  const barraPres = document.getElementById('barraTotalPresupuestos');
+  const porcGlobal = totalTopeGlobal > 0 ? (totalGastadoGlobal / totalTopeGlobal) * 100 : 0;
+  if(barraPres) {
+      barraPres.style.width = Math.min(porcGlobal, 100) + '%';
+      barraPres.className = porcGlobal > 100 ? 'bg-rose-500 h-1.5 rounded-full transition-all' : (porcGlobal > 75 ? 'bg-amber-500 h-1.5 rounded-full transition-all' : 'bg-sky-500 h-1.5 rounded-full transition-all');
+  }
+
+  // 4. RENDERIZAR GASTOS POR GRUPO
+  const panelGrp = document.getElementById('panelGrupos');
+  if(panelGrp) {
+    panelGrp.innerHTML = '';
+    const arrGrp = Object.keys(gastosPorGrupo).map(g => ({ grupo: g, monto: gastosPorGrupo[g] })).sort((a,b) => b.monto - a.monto);
+    const maxG = arrGrp[0]?.monto || 1;
+    if (arrGrp.length === 0 || (arrGrp.length === 1 && arrGrp[0].monto === 0)) {
+        panelGrp.innerHTML = '<p class="text-xs text-slate-400">No hay gastos en este periodo.</p>';
+    } else {
+        arrGrp.forEach(g => {
+          if (g.monto > 0) {
+              panelGrp.innerHTML += `<div><div class="flex justify-between text-[11px] mb-1"><span class="font-bold text-slate-700">${esc(g.grupo)}</span><span class="text-slate-500 font-medium">${S(g.monto)}</span></div><div class="w-full bg-slate-100 rounded-full h-1.5"><div class="bg-slate-800 h-1.5 rounded-full transition-all" style="width:${(g.monto/maxG)*100}%"></div></div></div>`;
+          }
+        });
+    }
+  }
+
+  // 5. RENDERIZAR MOVIMIENTOS RECIENTES
   const panelMov = document.getElementById('panelMovimientos');
   if(panelMov) {
     panelMov.innerHTML = '';
-    movimientos.sort((a,b) => (b.fecha||'').localeCompare(a.fecha||'') || b.id - a.id);
-
-    movimientos.slice(0, 30).forEach(m => {
-      const ing = m.tipo === 'Ingreso';
-      panelMov.innerHTML += `
-        <div class="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0">
-          <div class="w-8 h-8 rounded-xl flex items-center justify-center ${ing ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'} flex-shrink-0 text-xs font-bold">
-            <i class="fa-solid ${ing ? 'fa-arrow-down' : 'fa-arrow-up'}"></i>
-          </div>
-          <div class="flex-1 min-w-0">
-            <p class="text-xs font-bold text-slate-800 truncate">${esc(m.categoria)}</p>
-            <p class="text-[10px] text-slate-400 truncate">${esc(m.fecha ? m.fecha.substring(0,10) : '')} · ${esc(m.responsable)}</p>
-          </div>
-          <div class="text-right">
-            <span class="text-xs font-bold block ${ing ? 'text-emerald-600' : 'text-slate-800'}">${ing ? '+' : '−'}${S(m.monto)}</span>
-          </div>
-        </div>`;
+    movimientos.sort((a,b) => {
+      const fA = a.fecha ? a.fecha.substring(0,10) : '';
+      const fB = b.fecha ? b.fecha.substring(0,10) : '';
+      if (fA === fB) return b.id - a.id;
+      return fB > fA ? 1 : -1;
     });
+
+    if (movimientos.length === 0) {
+        panelMov.innerHTML = '<p class="text-[11px] text-slate-400 py-2">No hay movimientos registrados.</p>';
+    } else {
+        movimientos.slice(0, 40).forEach(m => {
+          const ing = m.tipo === 'Ingreso';
+          panelMov.innerHTML += `
+            <div class="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50 rounded-lg px-2 -mx-2 transition-colors" onclick="editarMov(${m.id}, '${m.tipo}')">
+              <div class="w-8 h-8 rounded-xl flex items-center justify-center ${ing ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'} flex-shrink-0 text-xs font-bold shadow-sm border border-${ing ? 'emerald' : 'rose'}-100">
+                <i class="fa-solid ${ing ? 'fa-arrow-down' : 'fa-arrow-up'}"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-[11px] font-bold text-slate-800 truncate leading-tight">${esc(m.categoria)}</p>
+                <p class="text-[9px] text-slate-400 truncate mt-0.5">${esc(m.fecha ? m.fecha.substring(0,10) : '')} · ${esc(m.responsable)} ${m.detalle ? '· '+esc(m.detalle) : ''}</p>
+              </div>
+              <div class="text-right flex flex-col justify-center">
+                <span class="text-[11px] font-bold block ${ing ? 'text-emerald-600' : 'text-slate-800'}">${ing ? '+' : '−'}${S(m.monto)}</span>
+              </div>
+            </div>`;
+        });
+    }
   }
 
   renderConfiguracion();
   renderFondos();
 }
 
+/* RENDER DE FONDOS Y CRÉDITOS (CORREGIDO LECTURA DE ABONOS) */
 function renderFondos() {
   const dashView = document.getElementById('viewDash');
   if(!dashView) return;
@@ -444,39 +547,88 @@ function renderFondos() {
       else dashView.appendChild(contenedor);
   }
 
+  const hoyIso = iso(new Date());
   const configCreditos = [
       { titulo: 'BCP Crédito', clave: 'bcp', nombreCat: 'bcp crédito' },
       { titulo: 'BBVA Crédito', clave: 'bbva_credito', nombreCat: 'bbva crédito' },
       { titulo: 'BBVA Tarjeta', clave: 'bbva_tarjeta', nombreCat: 'bbva tarjeta' }
   ];
 
-  let html = '<h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5 px-1">Resumen de Créditos</h3><div class="grid grid-cols-1 sm:grid-cols-3 gap-3">';
+  let html = '<h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2.5 px-1 mt-4">Resumen de Créditos</h3><div class="grid grid-cols-1 sm:grid-cols-3 gap-3">';
 
   configCreditos.forEach(cred => {
-      const cuotas = (cacheDatos[cred.clave] || {}).data || [];
-      let cuotasPendientes = cuotas.filter(c => {
-          const pag = (c.pagado || c.estado || '').toString().toLowerCase().trim();
-          return pag !== 'pagado' && pag !== 'si' && pag !== 'sí' && pag !== 'true' && pag !== '1' && c.pagado !== true && pag !== 'fondo';
+      const datosObj = cacheDatos[cred.clave] || {tabla:'', data:[]};
+      const cuotas = datosObj.data || [];
+      const tablaBd = datosObj.tabla;
+      
+      // 1. CÁLCULO DE ABONOS DESDE LA TABLA GASTOS
+      let fondoTotal = 0;
+      cacheDatos.gastos.forEach(g => {
+          const catGasto = (g.categoria || '').toLowerCase().trim();
+          const catBuscada = cred.nombreCat.toLowerCase().trim();
+          if (catGasto === catBuscada) {
+              fondoTotal += (Number(g.monto) || 0);
+          }
       });
 
-      cuotasPendientes.sort((a, b) => (a.proximo_vencimiento||a.fecha||'9999').localeCompare(b.proximo_vencimiento||b.fecha||'9999'));
+      let fondoUsado = 0;
+      let cuotasPendientes = [];
+      
+      cuotas.forEach(c => {
+          const pag = (c.pagado || c.estado || '').toString().toLowerCase().trim();
+          const montoCuota = Number(c.monto || c.cuota || 0);
+          
+          if (pag === 'fondo') {
+              fondoUsado += montoCuota; 
+          } else if (pag !== 'pagado' && pag !== 'si' && pag !== 'sí' && pag !== 'true' && pag !== '1' && c.pagado !== true) {
+              cuotasPendientes.push(c);
+          }
+      });
+
+      let fondoDisponible = Math.max(0, fondoTotal - fondoUsado);
+
+      cuotasPendientes.sort((a, b) => {
+          const fA = a.proximo_vencimiento || a.vencimiento || a.fecha || '9999-12-31';
+          const fB = b.proximo_vencimiento || b.vencimiento || b.fecha || '9999-12-31';
+          return fA > fB ? 1 : -1;
+      });
+
+      // 2. APLICACIÓN DE FONDO DISPONIBLE A LAS CUOTAS
+      for (let c of cuotasPendientes) {
+          const fVenc = c.proximo_vencimiento || c.vencimiento || c.fecha || '';
+          const montoCuota = Number(c.monto || c.cuota || 0);
+
+          if (fVenc && fVenc <= hoyIso && fondoDisponible >= montoCuota && montoCuota > 0) {
+              if (tablaBd) {
+                  // Actualizar en supabase en segundo plano
+                  supabase.from(tablaBd).update({ pagado: 'Fondo' }).eq('id', c.id).then();
+              }
+              fondoDisponible -= montoCuota;
+              c.pagado = 'Fondo'; 
+          }
+      }
+
+      cuotasPendientes = cuotasPendientes.filter(c => c.pagado !== 'Fondo');
 
       const prox = cuotasPendientes[0];
       const montoProxVal = prox ? Number(prox.monto || prox.cuota || 0) : 0;
       const rawFecha = prox ? (prox.proximo_vencimiento || prox.vencimiento || prox.fecha || '') : '';
+      const porc = (montoProxVal > 0) ? Math.min(100, (fondoDisponible / montoProxVal) * 100) : 100;
+      const color = porc >= 100 ? 'bg-emerald-500' : 'bg-sky-500';
 
       html += `
         <div class="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-sm">
           <div class="flex justify-between items-center mb-2">
             <span class="text-xs font-bold text-slate-800">${esc(cred.titulo)}</span>
-            <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">${cuotasPendientes.length} pendientes</span>
+            <span class="text-[10px] font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100">${S(fondoDisponible)} abono</span>
           </div>
           ${prox ? `
-            <div class="flex justify-between items-end text-xs">
-              <span class="text-[10px] text-slate-400 font-medium">Próx: ${rawFecha.substring(0, 10)}</span>
+            <div class="flex justify-between items-end text-[11px] mb-1">
+              <span class="text-[10px] text-slate-500 font-medium">Vence: ${rawFecha.substring(0, 10)}</span>
               <span class="font-bold text-slate-900">${S(montoProxVal)}</span>
             </div>
-          ` : `<p class="text-[11px] text-emerald-600 font-bold"><i class="fa-solid fa-check-circle mr-1"></i>Al día</p>`}
+            <div class="w-full bg-slate-100 rounded-full h-1"><div class="${color} h-1 rounded-full transition-all" style="width:${porc}%"></div></div>
+          ` : `<div class="mt-2 text-center py-1 bg-emerald-50 rounded-lg border border-emerald-100"><p class="text-[10px] text-emerald-600 font-bold"><i class="fa-solid fa-check-circle mr-1"></i>Cuotas al día</p></div>`}
         </div>`;
   });
 
@@ -489,9 +641,9 @@ window.cargarModuloCreditosDetallado = async function() {
   if(!contenedor) return;
 
   const configCreditos = [
-      { titulo: 'BCP Crédito', clave: 'bcp' },
-      { titulo: 'BBVA Crédito', clave: 'bbva_credito' },
-      { titulo: 'BBVA Tarjeta', clave: 'bbva_tarjeta' }
+      { titulo: 'BCP Crédito', clave: 'bcp', nombreCat: 'bcp crédito' },
+      { titulo: 'BBVA Crédito', clave: 'bbva_credito', nombreCat: 'bbva crédito' },
+      { titulo: 'BBVA Tarjeta', clave: 'bbva_tarjeta', nombreCat: 'bbva tarjeta' }
   ];
 
   let html = `<div class="space-y-4">`;
@@ -523,11 +675,9 @@ window.cargarModuloCreditosDetallado = async function() {
             <h3 class="text-sm font-bold text-slate-800">${esc(cred.titulo)}</h3>
             <span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-full">${pagadasCount}/${totalCuotas} cuotas</span>
           </div>
-
           <div class="w-full bg-slate-100 rounded-full h-1.5">
             <div class="bg-emerald-500 h-1.5 rounded-full transition-all" style="width:${porcAvance}%"></div>
           </div>
-
           <div class="grid grid-cols-2 gap-2 text-[11px]">
             <div class="bg-emerald-50/60 p-2.5 rounded-2xl border border-emerald-100">
               <span class="block font-bold text-emerald-800 mb-1">Pagado</span>
@@ -546,7 +696,6 @@ window.cargarModuloCreditosDetallado = async function() {
               </div>
             </div>
           </div>
-
           <details class="group rounded-xl bg-slate-50 p-2">
             <summary class="flex justify-between items-center text-xs font-bold text-slate-700 cursor-pointer">
               <span>Cronograma (${totalCuotas})</span>
@@ -580,7 +729,7 @@ window.cargarModuloCreditosDetallado = async function() {
   contenedor.innerHTML = html;
 }
 
-/* REGISTRO DE GASTOS E INGRESOS */
+/* REGISTRO Y EDICIÓN DE GASTOS E INGRESOS */
 window.enviarGasto = async function(e) {
   if(e) e.preventDefault();
   const btn = document.getElementById('btnGuardarGasto');
@@ -594,19 +743,19 @@ window.enviarGasto = async function(e) {
       fecha: document.getElementById('fechaGasto')?.value || iso(new Date()),
       categoria: document.getElementById('categoriaGasto')?.value || 'Gasto',
       monto: monto,
-      responsable: usuarioActual || 'Jhonathan',
+      responsable: document.getElementById('responsableGasto')?.value || usuarioActual || 'Jhonathan',
       descripcion: document.getElementById('descripcionGasto')?.value || ''
     };
 
     const { error } = await supabase.from('gastos').insert([payload]);
     if (error) throw error;
     
-    if(btn) { btn.innerText = 'Registrar Salida'; btn.disabled = false; }
+    if(btn) { btn.innerText = 'Guardar Salida'; btn.disabled = false; }
     document.getElementById('formGasto')?.reset();
     toast('Gasto guardado con éxito', true);
     cargarDashboard();
   } catch(err) {
-    if(btn) { btn.innerText = 'Registrar Salida'; btn.disabled = false; }
+    if(btn) { btn.innerText = 'Guardar Salida'; btn.disabled = false; }
     toast(err.message, false);
   }
 }
@@ -624,20 +773,104 @@ window.enviarIngreso = async function(e) {
       fecha: document.getElementById('fechaIngreso')?.value || iso(new Date()),
       categoria: document.getElementById('categoriaIngreso')?.value || 'Ingreso',
       monto: monto,
-      responsable: usuarioActual || 'Jhonathan',
+      responsable: document.getElementById('responsableIngreso')?.value || usuarioActual || 'Jhonathan',
       comentario: document.getElementById('comentarioIngreso')?.value || ''
     };
 
     const { error } = await supabase.from('ingresos').insert([payload]);
     if (error) throw error;
     
-    if(btn) { btn.innerText = 'Registrar Entrada'; btn.disabled = false; }
+    if(btn) { btn.innerText = 'Guardar Entrada'; btn.disabled = false; }
     document.getElementById('formIngreso')?.reset();
     toast('Ingreso guardado con éxito', true);
     cargarDashboard();
   } catch(err) {
-    if(btn) { btn.innerText = 'Registrar Entrada'; btn.disabled = false; }
+    if(btn) { btn.innerText = 'Guardar Entrada'; btn.disabled = false; }
     toast(err.message, false);
+  }
+}
+
+window.eliminarMov = async function(id, tipo) {
+  if (!confirm('¿Seguro que deseas eliminar este registro permanentemente?')) return;
+  const tabla = tipo === 'Gasto' ? 'gastos' : 'ingresos';
+  const { error } = await supabase.from(tabla).delete().eq('id', id);
+  if (error) toast('Error al eliminar: ' + error.message, false);
+  else { toast('Eliminado correctamente', true); cargarDashboard(); cerrarModalEdicion(); }
+}
+
+window.editarMov = function(id, tipo) {
+  const lista = tipo === 'Gasto' ? cacheDatos.gastos : cacheDatos.ingresos;
+  const item = lista.find(x => x.id === id);
+  if (!item) return;
+
+  const getE = i => document.getElementById(i);
+  if(getE('editMovId')) getE('editMovId').value = item.id;
+  if(getE('editMovTipo')) getE('editMovTipo').value = tipo;
+  if(getE('editMovMonto')) getE('editMovMonto').value = item.monto;
+  if(getE('editMovFecha')) getE('editMovFecha').value = item.fecha ? item.fecha.substring(0, 10) : '';
+  if(getE('editMovResponsable')) getE('editMovResponsable').value = item.responsable || 'Jhonathan';
+  if(getE('editMovDetalle')) getE('editMovDetalle').value = item.descripcion || item.comentario || '';
+
+  const selCat = getE('editMovCategoria');
+  if(selCat) {
+      selCat.innerHTML = getE(tipo === 'Gasto' ? 'categoriaGasto' : 'categoriaIngreso').innerHTML;
+      selCat.value = item.categoria;
+  }
+
+  // Agrega botón de eliminación al modal dinámicamente si no existe
+  let form = getE('formEdicionMov');
+  if(form && !document.getElementById('btnEliminarMov')) {
+      const btnDel = document.createElement('button');
+      btnDel.id = 'btnEliminarMov';
+      btnDel.type = 'button';
+      btnDel.className = 'w-full bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold py-3 rounded-xl mt-2 transition-all text-xs';
+      btnDel.innerText = 'Eliminar Registro';
+      form.appendChild(btnDel);
+  }
+  
+  if(document.getElementById('btnEliminarMov')) {
+      document.getElementById('btnEliminarMov').onclick = () => window.eliminarMov(item.id, tipo);
+  }
+
+  const modal = getE('modalEdicionMovimiento');
+  if(modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
+}
+
+window.cerrarModalEdicion = function() {
+  const modal = document.getElementById('modalEdicionMovimiento');
+  if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+}
+
+window.enviarEdicionMovimiento = async function(e) {
+  if(e) e.preventDefault();
+  try {
+      const getE = i => document.getElementById(i);
+      const id = getE('editMovId')?.value;
+      const tipo = getE('editMovTipo')?.value || 'Gasto';
+      const tabla = tipo === 'Gasto' ? 'gastos' : 'ingresos';
+
+      const payload = {
+        monto: parseFloat(getE('editMovMonto')?.value || 0),
+        fecha: getE('editMovFecha')?.value,
+        categoria: getE('editMovCategoria')?.value
+      };
+
+      if(getE('editMovResponsable')) payload.responsable = getE('editMovResponsable').value;
+      
+      const det = getE('editMovDetalle');
+      if(det) {
+          if (tipo === 'Gasto') payload.descripcion = det.value;
+          else payload.comentario = det.value;
+      }
+
+      const { error } = await supabase.from(tabla).update(payload).eq('id', id);
+      if (error) throw error;
+      
+      toast('Actualizado correctamente', true);
+      cerrarModalEdicion();
+      cargarDashboard();
+  } catch (err) {
+      toast('Error al actualizar: ' + err.message, false);
   }
 }
 
@@ -658,12 +891,39 @@ function renderConfiguracion() {
       <p class="text-xs font-bold text-slate-800 mb-1.5">${esc(grp)}</p>
       <div class="space-y-1">`;
     grupos[grp].forEach(c => {
-      html += `<div class="flex justify-between text-[11px] border-b border-slate-50 pb-0.5"><span class="text-slate-700">${esc(c.categoria)}</span><span class="text-slate-400">${S(c.presupuesto)}</span></div>`;
+      html += `<div class="flex justify-between items-center text-[11px] border-b border-slate-50 pb-1 pt-1"><span class="text-slate-700 font-bold">${esc(c.categoria)}</span><span class="text-slate-400 font-medium">Tope: ${S(c.presupuesto)}</span></div>`;
     });
     html += `</div></div>`;
   }
   html += '</div>';
   cont.innerHTML = html;
+}
+
+window.guardarCategoria = async function(e) {
+  if(e) e.preventDefault();
+  const getE = i => document.getElementById(i);
+  const payload = {
+    tipo: getE('confTipo')?.value || 'Gasto',
+    grupo: getE('confGrupo')?.value || null,
+    categoria: getE('confCategoria')?.value || 'Nueva',
+    presupuesto: parseFloat(getE('confPresupuesto')?.value || 0) || 0
+  };
+
+  const { error } = await supabase.from('configuracion').insert([payload]);
+  if(error) toast('Error al crear categoría', false);
+  else {
+    getE('formCategoria')?.reset();
+    toast('Categoría creada exitosamente', true);
+    cargarDashboard();
+  }
+}
+
+window.togglePorTipo = function() {
+  const confTipo = document.getElementById('confTipo');
+  if(!confTipo) return;
+  const esIngreso = confTipo.value === 'Ingreso';
+  if(document.getElementById('divConfGrupo')) document.getElementById('divConfGrupo').style.display = esIngreso ? 'none' : 'block';
+  if(document.getElementById('divConfPresupuesto')) document.getElementById('divConfPresupuesto').style.display = esIngreso ? 'none' : 'block';
 }
 
 verificarAutenticacion();
