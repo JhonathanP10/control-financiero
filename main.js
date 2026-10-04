@@ -502,23 +502,22 @@ function procesarYRenderizarDashboard() {
     elRes.className = 'text-[10px] mt-1 font-bold ' + (resPer >= 0 ? 'text-emerald-600' : 'text-rose-600');
   }
 
-  // 3. ORGANIZACIÓN EN 2 COLUMNAS (FILA SUPERIOR LIMPIA Y FILA INFERIOR EXPUESTA)
+  // 3. ORGANIZACIÓN EN 2 NIVELES (FILA SUPERIOR EXCLUSIVA DE 4 TARJETAS Y FILA INFERIOR 2 COLUMNAS)
   const viewDash = document.getElementById('viewDash');
   if (viewDash) {
       let mainContainer = document.getElementById('dashboardMainGrid');
       if (!mainContainer) {
           mainContainer = document.createElement('div');
           mainContainer.id = 'dashboardMainGrid';
-          mainContainer.className = 'space-y-6';
+          mainContainer.className = 'space-y-6 mt-4';
           
-          // Movemos todos los hijos actuales del dashboard dentro de este contenedor organizado
-          while (viewDash.children.length > 1) { // Dejamos el selector de fecha intacto arriba
+          while (viewDash.children.length > 1) {
               mainContainer.appendChild(viewDash.children[1]);
           }
           viewDash.appendChild(mainContainer);
       }
 
-      // Fila 1: Las 4 tarjetas de resumen horizontal limpias
+      // Fila Superior: Exactamente las 4 tarjetas principales
       let filaSuperior = document.getElementById('dashFilaSuperior');
       if (!filaSuperior) {
           filaSuperior = document.createElement('div');
@@ -552,7 +551,7 @@ function procesarYRenderizarDashboard() {
           filaSuperior.appendChild(cardSaldo);
       }
 
-      // Tarjeta 2: Ingresos por Categoría (Ubicado entre Saldo e Ingresos Periodo)
+      // Tarjeta 2: Ingresos por Categoría
       let cardIngCat = document.getElementById('cardIngresosCat');
       if (!cardIngCat) {
           cardIngCat = document.createElement('div');
@@ -601,34 +600,31 @@ function procesarYRenderizarDashboard() {
           filaSuperior.appendChild(cardGasPer);
       }
 
-      // Fila Inferior (2 Columnas perfectas para PC: Izquierda Presupuestos/Grupos, Derecha Movimientos Recientes)
+      // Fila Inferior: 2 Columnas amplias (Izquierda: Presupuestos y Grupos / Derecha: Movimientos Recientes)
       let filaInferior = document.getElementById('dashFilaInferior');
       if (!filaInferior) {
           filaInferior = document.createElement('div');
           filaInferior.id = 'dashFilaInferior';
-          filaInferior.className = 'grid grid-cols-1 lg:grid-cols-3 gap-6';
+          filaInferior.className = 'grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6';
           mainContainer.appendChild(filaInferior);
       }
 
-      // Columna Izquierda (2 spans en LG): Presupuestos y Grupos
       let colIzq = document.getElementById('dashColIzquierda');
       if (!colIzq) {
           colIzq = document.createElement('div');
           colIzq.id = 'dashColIzquierda';
-          colIzq.className = 'lg:col-span-2 space-y-6';
+          colIzq.className = 'space-y-6';
           filaInferior.appendChild(colIzq);
       }
 
-      // Columna Derecha (1 span en LG): Movimientos Recientes bajados y amplios
       let colDer = document.getElementById('dashColDerecha');
       if (!colDer) {
           colDer = document.createElement('div');
           colDer.id = 'dashColDerecha';
-          colDer.className = 'lg:col-span-1 space-y-6';
+          colDer.className = 'space-y-6';
           filaInferior.appendChild(colDer);
       }
 
-      // Asignar elementos a sus columnas correspondientes
       const boxPresupuestos = document.getElementById('panelPresupuestos')?.closest('.bg-white');
       const boxGrupos = document.getElementById('panelGrupos')?.closest('.bg-white');
       const boxMovimientos = document.getElementById('panelMovimientos')?.closest('.bg-white');
@@ -717,7 +713,7 @@ function procesarYRenderizarDashboard() {
     }
   }
 
-  // 6. RENDERIZAR MOVIMIENTOS RECIENTES AMPLIOS
+  // 6. RENDERIZAR MOVIMIENTOS RECIENTES
   const panelMov = document.getElementById('panelMovimientos');
   if(panelMov) {
     panelMov.innerHTML = '';
@@ -1113,10 +1109,6 @@ function renderConfiguracion() {
   }
   html += '</div>';
   cont.innerHTML = html;
-}
-
-window.guardarCategoria = async function5(e) {
-  if(e) e.preventDefault();
 }
 
 window.guardarCategoria = async function(e) {
