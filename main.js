@@ -51,6 +51,13 @@ async function fetchSafe(...nombresPosibles) {
   return { tabla: '', data: [] };
 }
 
+/* REGISTRO DE SERVICE WORKER PARA APP MÓVIL (PWA) */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW error:', err));
+  });
+}
+
 /* SISTEMA DE LOGIN Y PANTALLA COMPLETA */
 function verificarAutenticacion() {
   let layer = document.getElementById('viewLogin');
@@ -378,7 +385,7 @@ function renderHeaderUsuario() {
     </button>`;
 }
 
-/* RENDERIZADO ÚNICO Y ACTUALIZACIÓN DE DATOS */
+/* LÓGICA PRINCIPAL DEL DASHBOARD Y FILTROS */
 function procesarYRenderizarDashboard() {
   const filtro = calcularRango();
   const etiq = document.getElementById('etiquetaPeriodo');
@@ -450,8 +457,8 @@ function procesarYRenderizarDashboard() {
 
   let ingresosPeriodo = 0, gastosPeriodo = 0;
   let gastosPorCat = {}, gastosPorGrupo = {};
+  let ingresosPorRespCat = { 'Jhonathan': {}, 'Sindy': {} };
   let ingresosPorResp = { 'Jhonathan': 0, 'Sindy': 0 };
-  let ingresosPorCategoria = {};
   let movimientos = [];
 
   cacheDatos.ingresos.forEach(i => {
@@ -459,19 +466,14 @@ function procesarYRenderizarDashboard() {
     const m = Number(i.monto) || 0;
     const resp = i.responsable || 'Jhonathan';
     const cat = i.categoria || 'Otros';
-    const comentario = i.comentario || i.descripcion || '';
     
     if (fStr >= fDesdeStr && fStr <= fHastaStr) {
       ingresosPeriodo += m;
       if(ingresosPorResp[resp] !== undefined) ingresosPorResp[resp] += m;
-      
-      if (!ingresosPorCategoria[cat]) {
-        ingresosPorCategoria[cat] = { total: 0, items: [] };
-      }
-      ingresosPorCategoria[cat].total += m;
-      ingresosPorCategoria[cat].items.push({ monto: m, responsable: resp, comentario: comentario });
+      const targetUser = ingresosPorRespCat[resp] ? resp : 'Jhonathan';
+      ingresosPorRespCat[targetUser][cat] = (ingresosPorRespCat[targetUser][cat] || 0) + m;
     }
-    movimientos.push({ id: i.id, tipo: 'Ingreso', fecha: i.fecha, categoria: i.categoria, monto: m, responsable: resp, detalle: comentario });
+    movimientos.push({ id: i.id, tipo: 'Ingreso', fecha: i.fecha, categoria: i.categoria, monto: m, responsable: resp, detalle: i.comentario || i.descripcion || '' });
   });
 
   cacheDatos.gastos.forEach(g => {
@@ -493,68 +495,71 @@ function procesarYRenderizarDashboard() {
   if(document.getElementById('periodoJhoIn')) document.getElementById('periodoJhoIn').innerText = 'Jho: ' + S(ingresosPorResp['Jhonathan'] || 0);
   if(document.getElementById('periodoSinIn')) document.getElementById('periodoSinIn').innerText = 'Sin: ' + S(ingresosPorResp['Sindy'] || 0);
 
-  // 3. RENDERIZAR TARJETA: INGRESOS POR CATEGORÍA
-  const dashView = document.getElementById('viewDash');
-  if (dashView) {
-    let tarjetaIngCat = document.getElementById('cardIngresosPorCategoria');
-    if (!tarjetaIngCat) {
-      tarjetaIngCat = document.createElement('div');
-      tarjetaIngCat.id = 'cardIngresosPorCategoria';
-      tarjetaIngCat.className = 'bg-white rounded-3xl border border-slate-200/80 p-4 shadow-sm mb-4 w-full';
-      
-      const panelPres = document.getElementById('panelPresupuestos')?.closest('.bg-white') || document.getElementById('panelPresupuestos');
-      if (panelPres) {
-        dashView.insertBefore(tarjetaIngCat, panelPres);
-      } else {
-        dashView.appendChild(tarjetaIngCat);
-      }
-    }
-
-    let htmlIngCat = `
-      <div class="flex justify-between items-center mb-3">
-        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider"><i class="fa-solid fa-chart-pie mr-1 text-emerald-500"></i> Ingresos por Categoría</h3>
-        <span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">${filtro.etiqueta}</span>
-      </div>
-      <div class="space-y-3">`;
-
-    const catsArr = Object.keys(ingresosPorCategoria).map(c => ({ categoria: c, ...ingresosPorCategoria[c] })).sort((a,b) => b.total - a.total);
-
-    if (catsArr.length === 0) {
-      htmlIngCat += `<p class="text-[11px] text-slate-400 py-2 text-center">No hay ingresos registrados en este periodo.</p>`;
-    } else {
-      catsArr.forEach(item => {
-        htmlIngCat += `
-          <div class="bg-slate-50/70 p-3 rounded-2xl border border-slate-100">
-            <div class="flex justify-between items-center mb-1.5">
-              <span class="text-xs font-bold text-slate-800">${esc(item.categoria)}</span>
-              <span class="text-xs font-bold text-emerald-600">${S(item.total)}</span>
-            </div>
-            <div class="space-y-1 mt-2 pt-2 border-t border-slate-200/60">`;
-        
-        item.items.forEach(sub => {
-          htmlIngCat += `
-            <div class="flex justify-between items-center text-[11px]">
-              <span class="text-slate-600 flex items-center gap-1 font-medium">
-                <i class="fa-solid fa-user text-[9px] text-sky-500"></i> ${esc(sub.responsable)} 
-                ${sub.comentario ? `<span class="text-slate-400 italic">(${esc(sub.comentario)})</span>` : ''}
-              </span>
-              <span class="font-semibold text-slate-700">${S(sub.monto)}</span>
-            </div>`;
-        });
-
-        htmlIngCat += `</div></div>`;
-      });
-    }
-
-    htmlIngCat += `</div>`;
-    tarjetaIngCat.innerHTML = htmlIngCat;
-  }
-
   const resPer = ingresosPeriodo - gastosPeriodo;
   const elRes = document.getElementById('periodoResultado');
   if(elRes) {
     elRes.innerText = (resPer >= 0 ? 'Te quedan ' : 'Vas sobre-gastado ') + S(Math.abs(resPer));
     elRes.className = 'text-[10px] mt-1 font-bold ' + (resPer >= 0 ? 'text-emerald-600' : 'text-rose-600');
+  }
+
+  // 3. INYECCIÓN DEL DETALLE DE INGRESOS (ENTRE SALDO Y PERIODOS)
+  // Primero limpiamos si existe uno viejo creado en el contenedor incorrecto
+  let oldPanel = document.getElementById('panelIngresosCat');
+  if (oldPanel && oldPanel.closest('.mt-4') && !oldPanel.closest('.min-h-\\[140px\\]')) {
+      oldPanel.parentElement.remove();
+  }
+
+  let panelIngCat = document.getElementById('panelIngresosCat');
+  if (!panelIngCat) {
+      const cardIngresos = document.getElementById('periodoIngresos')?.closest('.bg-white');
+      if(cardIngresos && cardIngresos.parentElement) {
+          const gridContainer = cardIngresos.parentElement;
+          
+          // Reajustamos la grilla para que entren 4 elementos bien
+          gridContainer.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4';
+          
+          // Ajustamos Saldo para que no se rompa en Tablet/Móvil
+          const cardSaldo = document.getElementById('saldoDisponible')?.closest('.bg-slate-900');
+          if (cardSaldo) cardSaldo.className = 'bg-slate-900 rounded-3xl p-5 text-white shadow-xl shadow-slate-900/20 relative overflow-hidden flex flex-col justify-between sm:col-span-2 lg:col-span-1 min-h-[140px]';
+
+          // Creamos la nueva tarjeta de Detalle de Ingresos
+          const newBox = document.createElement('div');
+          newBox.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col min-h-[140px] animate-fade-in';
+          newBox.innerHTML = `
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Ingresos por Categoría</p>
+            <div id="panelIngresosCat" class="flex flex-col gap-1.5 overflow-y-auto scroll-fino pr-1 flex-1"></div>
+          `;
+          
+          // Insertamos exactamente antes de "Ingresos Periodo" (es decir, después de Saldo Histórico)
+          gridContainer.insertBefore(newBox, cardIngresos);
+          panelIngCat = document.getElementById('panelIngresosCat');
+      }
+  }
+
+  if (panelIngCat) {
+      panelIngCat.innerHTML = '';
+      ['Jhonathan', 'Sindy'].forEach(resp => {
+          const catsUser = ingresosPorRespCat[resp] || {};
+          const arrIngUser = Object.keys(catsUser).map(c => ({ cat: c, monto: catsUser[c] })).sort((a,b) => b.monto - a.monto);
+
+          if(arrIngUser.length > 0) {
+              panelIngCat.innerHTML += `<div class="mb-1 mt-1"><p class="text-[9px] font-bold text-slate-500 uppercase tracking-wider"><i class="fa-solid fa-user mr-1 text-emerald-500"></i>${resp} (${S(ingresosPorResp[resp])})</p></div>`;
+              const maxI = arrIngUser[0]?.monto || 1;
+              arrIngUser.forEach(i => {
+                  panelIngCat.innerHTML += `
+                  <div class="mb-1.5 pl-2 border-l-2 border-emerald-200">
+                    <div class="flex justify-between items-center text-[10px] mb-0.5">
+                      <span class="font-bold text-slate-700 truncate pr-1">${esc(i.cat)}</span>
+                      <span class="text-slate-500 font-medium">${S(i.monto)}</span>
+                    </div>
+                    <div class="w-full bg-slate-50 rounded-full h-1">
+                      <div class="bg-emerald-400 h-1 rounded-full transition-all" style="width:${(i.monto/maxI)*100}%"></div>
+                    </div>
+                  </div>`;
+              });
+          }
+      });
+      if(panelIngCat.innerHTML === '') panelIngCat.innerHTML = '<p class="text-[10px] text-slate-400 py-2">No hay ingresos registrados en este rango de fechas.</p>';
   }
 
   // 4. RENDERIZAR PRESUPUESTOS Y BARRAS
@@ -608,7 +613,7 @@ function procesarYRenderizarDashboard() {
     }
   }
 
-  // 6. RENDERIZAR MOVIMIENTOS RECIENTES
+  // 6. RENDERIZAR MOVIMIENTOS CON BOTÓN VISIBLE DE EDITAR
   const panelMov = document.getElementById('panelMovimientos');
   if(panelMov) {
     panelMov.innerHTML = '';
@@ -622,7 +627,7 @@ function procesarYRenderizarDashboard() {
     if (movimientos.length === 0) {
         panelMov.innerHTML = '<p class="text-[11px] text-slate-400 py-2">No hay movimientos registrados en este rango.</p>';
     } else {
-        movimientos.slice(0, 50).forEach(m => {
+        movimientos.slice(0, 40).forEach(m => {
           const ing = m.tipo === 'Ingreso';
           panelMov.innerHTML += `
             <div class="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50 rounded-lg px-2 -mx-2 transition-colors group" onclick="editarMov(${m.id}, '${m.tipo}')">
@@ -899,7 +904,7 @@ window.enviarIngreso = async function(e) {
   }
 }
 
-/* EDICIÓN Y ELIMINACIÓN */
+/* EDICIÓN Y ELIMINACIÓN REFORZADA (AHORA CON BOTÓN ROJO DE BORRAR) */
 window.eliminarMov = async function(id, tipo) {
   if (!confirm('¿Seguro que deseas eliminar este registro permanentemente?')) return;
   const tabla = tipo === 'Gasto' ? 'gastos' : 'ingresos';
@@ -1005,9 +1010,6 @@ function renderConfiguracion() {
   html += '</div>';
   cont.innerHTML = html;
 }
-
-window.guardarGasto = window.enviarGasto;
-window.guardarIngreso = window.enviarIngreso;
 
 window.guardarCategoria = async function(e) {
   if(e) e.preventDefault();
