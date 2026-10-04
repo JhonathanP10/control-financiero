@@ -7,7 +7,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 let periodo = { preset: 'mes', offset: 0, desde: null, hasta: null };
 let cacheDatos = { 
-  gastos: [], ingresos: [], configuracion: [], deudas: [], 
+  gastos: [], ingresos: [], configuracion: [], 
   bcp: {tabla:'bcp_credito', data:[]}, 
   bbva_credito: {tabla:'bbva_credito', data:[]}, 
   bbva_tarjeta: {tabla:'bbva_tarjeta', data:[]} 
@@ -52,27 +52,32 @@ async function fetchSafe(...nombresPosibles) {
 
 /* Vistas y Pestañas */
 function mostrarVista(vista) {
-  const mapa = { dash: 'viewDash', registro: 'viewRegistro', deudas: 'viewDeudas', config: 'viewConfig' };
+  const mapa = { dash: 'viewDash', registro: 'viewRegistro', creditos: 'viewDeudas', config: 'viewConfig' };
   Object.keys(mapa).forEach(v => {
     const el = document.getElementById(mapa[v]);
     if(el) el.classList.toggle('hidden', v !== vista);
   });
   document.querySelectorAll('.nav-item').forEach(b => {
-    const activo = b.dataset.vista === vista;
+    const activo = b.dataset.vista === vista || (vista === 'creditos' && b.dataset.vista === 'deudas');
     b.classList.toggle('activo', activo);
   });
-  const titulos = { dash: 'Panel', registro: 'Registrar', deudas: 'Salir de deudas', config: 'Categorías' };
+  const titulos = { dash: 'Panel', registro: 'Registrar', creditos: 'Créditos pendientes', config: 'Categorías' };
   const titMovil = document.getElementById('tituloVistaMovil');
   if(titMovil) titMovil.innerText = titulos[vista];
   
   window.scrollTo({ top: 0, behavior: 'smooth' });
-  if (vista === 'deudas') cargarPlanDeudas();
+  if (vista === 'creditos') cargarModuloCreditosDetallado();
   if (vista === 'registro') setTimeout(() => {
       const g = document.getElementById('montoGasto');
       if(g) g.focus();
   }, 250);
 }
-document.querySelectorAll('.nav-item').forEach(b => b.addEventListener('click', () => mostrarVista(b.dataset.vista)));
+document.querySelectorAll('.nav-item').forEach(b => {
+  b.addEventListener('click', () => {
+    const v = b.dataset.vista;
+    mostrarVista(v === 'deudas' ? 'creditos' : v);
+  });
+});
 
 window.cambiarTab = function(tipo) {
   const esIngreso = String(tipo).toLowerCase().includes('ingreso');
@@ -173,12 +178,10 @@ window.cargarDashboard = async function() {
     const resG = await supabase.from('gastos').select('*').limit(100000).order('id', { ascending: false });
     const resI = await supabase.from('ingresos').select('*').limit(100000).order('id', { ascending: false });
     const resC = await supabase.from('configuracion').select('*').limit(5000);
-    const resD = await supabase.from('deudas').select('*').limit(5000);
 
     cacheDatos.gastos = (!resG.error && resG.data) ? resG.data.map(normalizar) : [];
     cacheDatos.ingresos = (!resI.error && resI.data) ? resI.data.map(normalizar) : [];
     cacheDatos.configuracion = (!resC.error && resC.data) ? resC.data.map(normalizar) : [];
-    cacheDatos.deudas = (!resD.error && resD.data) ? resD.data.map(normalizar) : [];
 
     cacheDatos.bcp = await fetchSafe('bcp_credito', 'bcp', 'bcpcredito');
     cacheDatos.bbva_credito = await fetchSafe('bbva_credito', 'bbvacredito', 'bbva');
@@ -198,11 +201,9 @@ function procesarYRenderizarDashboard() {
 
   const selGasto = document.getElementById('categoriaGasto');
   const selIng = document.getElementById('categoriaIngreso');
-  const selDeudaCat = document.getElementById('deudaCategoria');
   
   if(selGasto) selGasto.innerHTML = '';
   if(selIng) selIng.innerHTML = '';
-  if(selDeudaCat) selDeudaCat.innerHTML = '<option value="">(usar nombre de la deuda)</option>';
 
   const gruposG = {};
   cacheDatos.configuracion.forEach(c => {
@@ -217,10 +218,8 @@ function procesarYRenderizarDashboard() {
     const og2 = document.createElement('optgroup'); og2.label = grp;
     gruposG[grp].forEach(cat => {
       const o = document.createElement('option'); o.value = cat; o.textContent = cat; og.appendChild(o);
-      const o2 = document.createElement('option'); o2.value = cat; o2.textContent = cat; og2.appendChild(o2);
     });
     if(selGasto) selGasto.appendChild(og);
-    if(selDeudaCat) selDeudaCat.appendChild(og2);
   }
 
   cacheDatos.configuracion.filter(c => c.tipo === 'Ingreso' || c.tipo === 'ingreso').forEach(c => {
@@ -276,7 +275,6 @@ function procesarYRenderizarDashboard() {
       if(ingresosPorResp[resp] !== undefined) ingresosPorResp[resp] += m;
       else ingresosPorResp[resp] = m;
 
-      // Agrupar por usuario y su categoría de ingreso
       const targetUser = ingresosPorRespCat[resp] ? resp : 'Jhonathan';
       ingresosPorRespCat[targetUser][cat] = (ingresosPorRespCat[targetUser][cat] || 0) + m;
     }
@@ -348,11 +346,9 @@ function procesarYRenderizarDashboard() {
     });
   }
 
-  // Renderizar Ingresos por Categoría divididos por Jhonathan y Sindy
   const panelIngCat = document.getElementById('panelIngresosCat');
   if(panelIngCat) {
     panelIngCat.innerHTML = '';
-    
     ['Jhonathan', 'Sindy'].forEach(resp => {
       const catsUser = ingresosPorRespCat[resp] || {};
       const arrIngUser = Object.keys(catsUser).map(c => ({ cat: c, monto: catsUser[c] })).sort((a,b) => b.monto - a.monto);
@@ -374,7 +370,6 @@ function procesarYRenderizarDashboard() {
   const panelMov = document.getElementById('panelMovimientos');
   if(panelMov) {
     panelMov.innerHTML = '';
-    
     movimientos.sort((a,b) => {
       const fA = a.fecha ? a.fecha.substring(0,10) : '';
       const fB = b.fecha ? b.fecha.substring(0,10) : '';
@@ -448,7 +443,6 @@ function renderFondos() {
       cacheDatos.gastos.forEach(g => {
           const catGasto = (g.categoria || '').toLowerCase().trim();
           const catBuscada = cred.nombreCat.toLowerCase().trim();
-          
           if (catGasto === catBuscada) {
               fondoTotal += (Number(g.monto) || 0);
           }
@@ -518,6 +512,119 @@ function renderFondos() {
   });
 
   html += '</div>';
+  contenedor.innerHTML = html;
+}
+
+/* MÓDULO DE CRÉDITOS PENDIENTES DETALLADO */
+window.cargarModuloCreditosDetallado = async function() {
+  const contenedor = document.getElementById('viewDeudas');
+  if(!contenedor) return;
+
+  const configCreditos = [
+      { titulo: 'BCP Crédito', clave: 'bcp', nombreCat: 'bcp crédito' },
+      { titulo: 'BBVA Crédito', clave: 'bbva_credito', nombreCat: 'bbva crédito' },
+      { titulo: 'BBVA Tarjeta', clave: 'bbva_tarjeta', nombreCat: 'bbva tarjeta' }
+  ];
+
+  let html = `<div class="max-w-5xl mx-auto space-y-6">
+    <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div>
+        <h2 class="text-lg font-bold text-slate-800">Control de Créditos Pendientes</h2>
+        <p class="text-xs text-slate-500">Detalle general de cuotas, montos pagados, pendientes e intereses.</p>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">`;
+
+  configCreditos.forEach(cred => {
+      const datosObj = cacheDatos[cred.clave] || {tabla:'', data:[]};
+      const cuotas = datosObj.data || [];
+
+      let totalCuotas = cuotas.length;
+      let pagadasCount = 0;
+      let pendientesCount = 0;
+      let montoTotalPagado = 0;
+      let montoTotalPendiente = 0;
+      let interesTotalPagado = 0;
+      let interesTotalPendiente = 0;
+
+      cuotas.forEach(c => {
+          const pag = (c.pagado || c.estado || '').toString().toLowerCase().trim();
+          const monto = Number(c.monto || c.cuota || 0);
+          const interes = Number(c.interes || c.monto_interes || 0);
+          const esPagado = pag === 'pagado' || pag === 'si' || pag === 'sí' || pag === 'true' || pag === '1' || c.pagado === true || pag === 'fondo';
+
+          if (esPagado) {
+              pagadasCount++;
+              montoTotalPagado += monto;
+              interesTotalPagado += interes;
+          } else {
+              pendientesCount++;
+              montoTotalPendiente += monto;
+              interesTotalPendiente += interes;
+          }
+      });
+
+      const porcAvance = totalCuotas > 0 ? (pagadasCount / totalCuotas) * 100 : 0;
+
+      html += `<div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col justify-between">
+          <div>
+            <div class="flex justify-between items-center mb-3">
+              <h3 class="text-sm font-bold text-slate-800">${esc(cred.titulo)}</h3>
+              <span class="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">${pagadasCount}/${totalCuotas} cuotas</span>
+            </div>
+            
+            <div class="w-full bg-slate-100 rounded-full h-2 mb-4">
+              <div class="bg-emerald-500 h-2 rounded-full transition-all" style="width:${porcAvance}%"></div>
+            </div>
+
+            <div class="space-y-3 text-xs mb-6">
+              <div class="flex justify-between py-1 border-b border-slate-50">
+                <span class="text-slate-500">Monto Pagado:</span>
+                <span class="font-bold text-emerald-600">${S(montoTotalPagado)}</span>
+              </div>
+              <div class="flex justify-between py-1 border-b border-slate-50">
+                <span class="text-slate-500">Monto Pendiente:</span>
+                <span class="font-bold text-slate-800">${S(montoTotalPendiente)}</span>
+              </div>
+              <div class="flex justify-between py-1 border-b border-slate-50">
+                <span class="text-slate-500">Intereses Pagados:</span>
+                <span class="font-bold text-slate-700">${S(interesTotalPagado)}</span>
+              </div>
+              <div class="flex justify-between py-1">
+                <span class="text-slate-500">Intereses Pendientes:</span>
+                <span class="font-bold text-slate-700">${S(interesTotalPendiente)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h4 class="text-xs font-bold text-slate-700 mb-2">Cuotas y Estado</h4>
+            <div class="max-h-48 overflow-y-auto space-y-1.5 pr-1">`;
+
+      cuotas.forEach((c, idx) => {
+          const pag = (c.pagado || c.estado || '').toString().toLowerCase().trim();
+          const esPagado = pag === 'pagado' || pag === 'si' || pag === 'sí' || pag === 'true' || pag === '1' || c.pagado === true || pag === 'fondo';
+          const montoCuota = Number(c.monto || c.cuota || 0);
+          const fechaCuota = c.proximo_vencimiento || c.vencimiento || c.fecha || 'Sin fecha';
+          
+          html += `<div class="flex justify-between items-center text-[11px] p-2 rounded-xl bg-slate-50 border border-slate-100">
+              <div>
+                <span class="font-semibold text-slate-700">Cuota #${idx + 1}</span>
+                <span class="text-slate-400 block text-[10px]">${fechaCuota.substring(0, 10)}</span>
+              </div>
+              <div class="text-right">
+                <span class="font-bold block ${esPagado ? 'text-emerald-600' : 'text-slate-800'}">${S(montoCuota)}</span>
+                <span class="text-[9px] px-1.5 py-0.5 rounded ${esPagado ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">${esPagado ? 'Pagado' : 'Pendiente'}</span>
+              </div>
+          </div>`;
+      });
+
+      html += `</div>
+          </div>
+      </div>`;
+  });
+
+  html += `</div></div>`;
   contenedor.innerHTML = html;
 }
 
@@ -669,63 +776,6 @@ window.enviarEdicionMovimiento = async function(e) {
       cargarDashboard();
   } catch (err) {
       toast('Error al actualizar: ' + err.message, false);
-  }
-}
-
-window.cargarPlanDeudas = async function() {
-  const deudas = cacheDatos.deudas;
-  const vacio = document.getElementById('deudasVacio');
-  const bloque = document.getElementById('bloquePlan');
-  if(vacio) vacio.classList.toggle('hidden', deudas.length > 0);
-  if(bloque) bloque.classList.toggle('hidden', deudas.length === 0);
-
-  if (!deudas.length) return;
-
-  const totalSaldo = deudas.reduce((s, d) => s + (Number(d.saldo_actual || d.saldo) || 0), 0);
-  const totalMinimos = deudas.reduce((s, d) => s + (Number(d.pago_minimo || d.minimo) || 0), 0);
-  const interesMensual = deudas.reduce((s, d) => s + (Number(d.saldo_actual || d.saldo) * ((Number(d.tasa_anual || d.tasa) / 100) / 12)), 0);
-
-  if(document.getElementById('dTotal')) document.getElementById('dTotal').innerText = S(totalSaldo);
-  if(document.getElementById('dMinimos')) document.getElementById('dMinimos').innerText = S(totalMinimos);
-  if(document.getElementById('dInteres')) document.getElementById('dInteres').innerText = S(interesMensual);
-  if(document.getElementById('dExcedente')) document.getElementById('dExcedente').innerText = S(0);
-
-  const lista = document.getElementById('listaDeudas');
-  if(lista) {
-    lista.innerHTML = '';
-    deudas.forEach(d => {
-      const saldo = Number(d.saldo_actual || d.saldo) || 0;
-      const inicial = Number(d.saldo_inicial || d.inicial) || saldo;
-      const avance = inicial > 0 ? Math.min(100, Math.max(0, (1 - saldo / inicial) * 100)) : 0;
-      lista.innerHTML += `<div class="border border-slate-100 rounded-2xl p-4">
-        <p class="text-sm font-bold text-slate-800">${esc(d.nombre)}</p>
-        <p class="text-[11px] text-slate-500">${Number(d.tasa_anual || d.tasa || 0).toFixed(1)}% anual · mínimo ${S(d.pago_minimo || d.minimo)}</p>
-        <div class="flex justify-between text-xs my-1"><span class="font-bold text-slate-800">${S(saldo)}</span><span>${avance.toFixed(0)}% liquidado</span></div>
-        <div class="w-full bg-slate-100 rounded-full h-2"><div class="bg-emerald-500 h-2 rounded-full" style="width:${avance}%"></div></div>
-      </div>`;
-    });
-  }
-}
-
-window.guardarDeuda = async function(e) {
-  if(e) e.preventDefault();
-  const getE = i => document.getElementById(i);
-  const payload = {
-    nombre: getE('deudaNombre')?.value || 'Nueva Deuda',
-    saldo_actual: parseFloat(getE('deudaSaldo')?.value || 0),
-    tasa_anual: parseFloat(getE('deudaTasa')?.value || 0) || 0,
-    pago_minimo: parseFloat(getE('deudaMinimo')?.value || 0),
-    dia_pago: parseInt(getE('deudaDia')?.value || 15) || 15,
-    categoria_gasto: getE('deudaCategoria')?.value || null,
-    saldo_inicial: parseFloat(getE('deudaSaldo')?.value || 0)
-  };
-
-  const { error } = await supabase.from('deudas').insert([payload]);
-  if (error) toast('Error al guardar deuda: ' + error.message, false);
-  else {
-    document.getElementById('formDeuda')?.reset();
-    toast('Deuda guardada', true);
-    cargarDashboard();
   }
 }
 
