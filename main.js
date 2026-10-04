@@ -385,7 +385,7 @@ function renderHeaderUsuario() {
     </button>`;
 }
 
-/* LÓGICA PRINCIPAL Y REESTRUCTURACIÓN DE DISEÑO LIMPIA Y ÚNICA */
+/* RENDERIZADO ÚNICO Y ACTUALIZACIÓN DE DATOS (SIN DUPLICAR ELEMENTOS) */
 function procesarYRenderizarDashboard() {
   const filtro = calcularRango();
   const etiq = document.getElementById('etiquetaPeriodo');
@@ -500,137 +500,6 @@ function procesarYRenderizarDashboard() {
   if(elRes) {
     elRes.innerText = (resPer >= 0 ? 'Te quedan ' : 'Vas sobre-gastado ') + S(Math.abs(resPer));
     elRes.className = 'text-[10px] mt-1 font-bold ' + (resPer >= 0 ? 'text-emerald-600' : 'text-rose-600');
-  }
-
-  // 3. ORGANIZACIÓN ÚNICA SIN DUPLICACIONES EN EL DOM
-  const viewDash = document.getElementById('viewDash');
-  if (viewDash) {
-      let mainContainer = document.getElementById('dashboardMainGrid');
-      if (!mainContainer) {
-          mainContainer = document.createElement('div');
-          mainContainer.id = 'dashboardMainGrid';
-          mainContainer.className = 'space-y-6 mt-4';
-          
-          // Recolectar todos los paneles sueltos que ya venían en el HTML original y meterlos al contenedor único
-          const panelesOriginales = Array.from(viewDash.children).filter(el => 
-              el.id !== 'headerDashUsuario' && 
-              el.id !== 'panelFondosCreditos' &&
-              el.id !== 'dashboardMainGrid'
-          );
-          
-          panelesOriginales.forEach(el => mainContainer.appendChild(el));
-          viewDash.appendChild(mainContainer);
-      }
-
-      // Fila Superior (4 Tarjetas exactas)
-      let filaSuperior = document.getElementById('dashFilaSuperior');
-      if (!filaSuperior) {
-          filaSuperior = document.createElement('div');
-          filaSuperior.id = 'dashFilaSuperior';
-          filaSuperior.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4';
-          mainContainer.prepend(filaSuperior);
-      }
-
-      // Crear las 4 tarjetas una sola vez si no existen
-      if (!document.getElementById('cardSaldoHistorico')) {
-          const cardSaldo = document.createElement('div');
-          cardSaldo.id = 'cardSaldoHistorico';
-          cardSaldo.className = 'bg-slate-900 rounded-3xl p-5 text-white shadow-xl shadow-slate-900/20 relative overflow-hidden flex flex-col justify-between min-h-[150px]';
-          cardSaldo.innerHTML = `
-            <div class="absolute -right-4 -top-4 text-slate-800/50 text-7xl"><i class="fa-solid fa-vault"></i></div>
-            <div class="relative z-10">
-              <p class="text-sky-300 text-[10px] font-bold uppercase tracking-wider mb-1">Saldo Histórico</p>
-              <h3 class="text-3xl font-extrabold tracking-tight" id="saldoDisponible">${S(saldoHist)}</h3>
-            </div>
-            <div class="relative z-10 grid grid-cols-2 gap-2 text-[10px] mt-3 pt-3 border-t border-slate-800">
-              <div class="bg-white/10 p-2 rounded-xl backdrop-blur-sm">
-                <p class="text-slate-300 font-bold mb-0.5">Jhonathan</p>
-                <p class="font-bold text-white" id="jhoSaldo">${S(statsResp['Jhonathan'].in - statsResp['Jhonathan'].out)}</p>
-              </div>
-              <div class="bg-white/10 p-2 rounded-xl backdrop-blur-sm">
-                <p class="text-slate-300 font-bold mb-0.5">Sindy</p>
-                <p class="font-bold text-white" id="sinSaldo">${S(statsResp['Sindy'].in - statsResp['Sindy'].out)}</p>
-              </div>
-            </div>`;
-          filaSuperior.appendChild(cardSaldo);
-      }
-
-      if (!document.getElementById('cardIngresosCat')) {
-          const cardIngCat = document.createElement('div');
-          cardIngCat.id = 'cardIngresosCat';
-          cardIngCat.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col min-h-[150px]';
-          cardIngCat.innerHTML = `
-            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Ingresos por Categoría</p>
-            <div id="panelIngresosCat" class="flex flex-col gap-1.5 overflow-y-auto scroll-fino pr-1 flex-1 max-h-36"></div>`;
-          filaSuperior.appendChild(cardIngCat);
-      }
-
-      if (!document.getElementById('cardIngresosPeriodo')) {
-          const cardIngPer = document.createElement('div');
-          cardIngPer.id = 'cardIngresosPeriodo';
-          cardIngPer.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col justify-between min-h-[150px] relative overflow-hidden';
-          cardIngPer.innerHTML = `
-            <div class="absolute right-0 top-0 w-16 h-16 bg-emerald-50 rounded-bl-full flex items-start justify-end p-3"><i class="fa-solid fa-arrow-down text-emerald-500"></i></div>
-            <div>
-              <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Ingresos Periodo</p>
-              <p class="text-xl font-bold text-slate-800 mt-2" id="periodoIngresos">${S(ingresosPeriodo)}</p>
-            </div>
-            <div class="flex justify-between text-[10px] font-semibold text-slate-400 mt-3 bg-slate-50 px-3 py-2 rounded-xl">
-              <span id="periodoJhoIn">Jho: S/ 0.00</span>
-              <span id="periodoSinIn">Sin: S/ 0.00</span>
-            </div>`;
-          filaSuperior.appendChild(cardIngPer);
-      }
-
-      if (!document.getElementById('cardGastosPeriodo')) {
-          const cardGasPer = document.createElement('div');
-          cardGasPer.id = 'cardGastosPeriodo';
-          cardGasPer.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col justify-between min-h-[150px] relative overflow-hidden';
-          cardGasPer.innerHTML = `
-            <div class="absolute right-0 top-0 w-16 h-16 bg-rose-50 rounded-bl-full flex items-start justify-end p-3"><i class="fa-solid fa-arrow-up text-rose-500"></i></div>
-            <div>
-              <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Gastos Periodo</p>
-              <p class="text-xl font-bold text-slate-800 mt-2" id="periodoGastos">${S(gastosPeriodo)}</p>
-            </div>
-            <div class="mt-3 bg-slate-50 px-3 py-2 rounded-xl flex items-center">
-               <span id="periodoResultado" class="text-[10px] font-bold">Calculando...</span>
-            </div>`;
-          filaSuperior.appendChild(cardGasPer);
-      }
-
-      // Fila Inferior (2 Columnas: Izquierda Presupuestos/Grupos, Derecha Movimientos Recientes)
-      let filaInferior = document.getElementById('dashFilaInferior');
-      if (!filaInferior) {
-          filaInferior = document.createElement('div');
-          filaInferior.id = 'dashFilaInferior';
-          filaInferior.className = 'grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6';
-          mainContainer.appendChild(filaInferior);
-      }
-
-      let colIzq = document.getElementById('dashColIzquierda');
-      if (!colIzq) {
-          colIzq = document.createElement('div');
-          colIzq.id = 'dashColIzquierda';
-          colIzq.className = 'space-y-6';
-          filaInferior.appendChild(colIzq);
-      }
-
-      let colDer = document.getElementById('dashColDerecha');
-      if (!colDer) {
-          colDer = document.createElement('div');
-          colDer.id = 'dashColDerecha';
-          colDer.className = 'space-y-6';
-          filaInferior.appendChild(colDer);
-      }
-
-      // Mover los paneles de presupuestos, grupos y movimientos a sus respectivas columnas sin duplicar
-      const boxPresupuestos = document.getElementById('panelPresupuestos')?.closest('.bg-white');
-      const boxGrupos = document.getElementById('panelGrupos')?.closest('.bg-white');
-      const boxMovimientos = document.getElementById('panelMovimientos')?.closest('.bg-white');
-
-      if (boxPresupuestos && !colIzq.contains(boxPresupuestos)) colIzq.appendChild(boxPresupuestos);
-      if (boxGrupos && !colIzq.contains(boxGrupos)) colIzq.appendChild(boxGrupos);
-      if (boxMovimientos && !colDer.contains(boxMovimientos)) colDer.appendChild(boxMovimientos);
   }
 
   // Llenar panel de ingresos por categoría
