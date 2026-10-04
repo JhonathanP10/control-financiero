@@ -5,6 +5,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
+let usuarioActual = localStorage.getItem('usuario_app') || null;
 let periodo = { preset: 'mes', offset: 0, desde: null, hasta: null };
 let cacheDatos = { 
   gastos: [], ingresos: [], configuracion: [], 
@@ -48,6 +49,135 @@ async function fetchSafe(...nombresPosibles) {
     } catch (e) {}
   }
   return { tabla: '', data: [] };
+}
+
+/* GESTIÓN DE AUTENTICACIÓN Y VISTA DE LOGIN */
+function verificarAutenticacion() {
+  let layer = document.getElementById('viewLogin');
+  if (!layer) {
+    layer = document.createElement('div');
+    layer.id = 'viewLogin';
+    layer.className = 'fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4';
+    document.body.appendChild(layer);
+  }
+
+  if (!usuarioActual) {
+    layer.innerHTML = `
+      <div class="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-slate-100 text-center">
+        <div class="w-16 h-16 bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl shadow-inner">
+          <i class="fa-solid fa-lock"></i>
+        </div>
+        <h2 class="text-xl font-bold text-slate-800 mb-1">Iniciar Sesión</h2>
+        <p class="text-xs text-slate-500 mb-6">Selecciona tu usuario e ingresa tu contraseña</p>
+        
+        <form id="formLogin" onsubmit="window.ejecutarLogin(event)" class="space-y-4 text-left">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1.5">Usuario</label>
+            <select id="loginUsuario" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-sky-500">
+              <option value="Jhonathan">Jhonathan</option>
+              <option value="Sindy">Sindy</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1.5">Contraseña</label>
+            <input type="password" id="loginClave" required placeholder="Tu contraseña" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-sky-500">
+          </div>
+          <button type="submit" id="btnIngresarApp" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-2xl text-sm shadow-lg shadow-slate-900/20 transition-all">
+            Ingresar al Sistema
+          </button>
+        </form>
+      </div>`;
+    layer.classList.remove('hidden');
+  } else {
+    layer.classList.add('hidden');
+    cargarDashboard();
+  }
+}
+
+window.ejecutarLogin = async function(e) {
+  if(e) e.preventDefault();
+  const usu = document.getElementById('loginUsuario').value;
+  const cla = document.getElementById('loginClave').value;
+  const btn = document.getElementById('btnIngresarApp');
+  
+  btn.innerText = 'Verificando...';
+  btn.disabled = true;
+
+  try {
+    const { data, error } = await supabase.from('usuarios').select('*').eq('usuario', usu).single();
+    
+    if (error || !data) throw new Error('Usuario no encontrado en la base de datos.');
+
+    if (data.clave !== cla) {
+      throw new Error('Contraseña incorrecta.');
+    }
+
+    // Validación de clave genérica (Ej: '1234')
+    if (cla === '1234') {
+      btn.innerText = 'Ingresar al Sistema';
+      btn.disabled = false;
+      window.mostrarModalCambioClave(usu);
+      return;
+    }
+
+    usuarioActual = usu;
+    localStorage.setItem('usuario_app', usu);
+    toast('¡Bienvenido, ' + usu + '!', true);
+    verificarAutenticacion();
+  } catch (err) {
+    toast(err.message, false);
+    btn.innerText = 'Ingresar al Sistema';
+    btn.disabled = false;
+  }
+}
+
+window.mostrarModalCambioClave = function(usu) {
+  const layer = document.getElementById('viewLogin');
+  layer.innerHTML = `
+    <div class="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-slate-100 text-center">
+      <div class="w-16 h-16 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl shadow-inner">
+        <i class="fa-solid fa-key"></i>
+      </div>
+      <h2 class="text-xl font-bold text-slate-800 mb-1">Cambio Obligatorio</h2>
+      <p class="text-xs text-slate-500 mb-6">Hola <b>${usu}</b>, estás usando la contraseña genérica. Por seguridad, debes cambiarla ahora.</p>
+      
+      <form onsubmit="window.actualizarClaveNueva(event, '${usu}')" class="space-y-4 text-left">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1.5">Nueva Contraseña</label>
+          <input type="password" id="nuevaClaveInput" required placeholder="Mínimo 4 caracteres" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-amber-500">
+        </div>
+        <button type="submit" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3.5 rounded-2xl text-sm shadow-lg shadow-amber-600/20 transition-all">
+          Guardar y Entrar
+        </button>
+      </form>
+    </div>`;
+}
+
+window.actualizarClaveNueva = async function(e, usu) {
+  if(e) e.preventDefault();
+  const nueva = document.getElementById('nuevaClaveInput').value;
+  if(!nueva || nueva.length < 3) {
+    toast('La contraseña es muy corta', false);
+    return;
+  }
+
+  try {
+    const { error } = await supabase.from('usuarios').update({ clave: nueva }).eq('usuario', usu);
+    if(error) throw error;
+
+    toast('¡Contraseña actualizada con éxito!', true);
+    usuarioActual = usu;
+    localStorage.setItem('usuario_app', usu);
+    verificarAutenticacion();
+  } catch(err) {
+    toast('Error al actualizar clave: ' + err.message, false);
+  }
+}
+
+window.cerrarSesion = function() {
+  localStorage.removeItem('usuario_app');
+  usuarioActual = null;
+  verificarAutenticacion();
 }
 
 /* Vistas y Pestañas */
@@ -170,7 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if(document.getElementById('fechaGasto')) document.getElementById('fechaGasto').valueAsDate = hoy;
   if(document.getElementById('pagoFecha')) document.getElementById('pagoFecha').valueAsDate = hoy;
   pintarChips();
-  cargarDashboard();
+  verificarAutenticacion();
 });
 
 window.cargarDashboard = async function() {
@@ -514,7 +644,6 @@ function renderFondos() {
   contenedor.innerHTML = html;
 }
 
-/* MÓDULO DE CRÉDITOS PENDIENTES CON CUOTAS ORDENADAS POR FECHA */
 window.cargarModuloCreditosDetallado = async function() {
   const contenedor = document.getElementById('viewDeudas');
   if(!contenedor) return;
@@ -536,7 +665,6 @@ window.cargarModuloCreditosDetallado = async function() {
 
   configCreditos.forEach(cred => {
       const datosObj = cacheDatos[cred.clave] || {tabla:'', data:[]};
-      // Hacemos una copia para ordenar las cuotas cronológicamente por fecha de vencimiento
       let cuotas = [...(datosObj.data || [])];
       
       cuotas.sort((a, b) => {
@@ -822,7 +950,15 @@ function renderConfiguracion() {
     if(c.tipo === 'Gasto' || c.tipo === 'gasto') (grupos[grp] = grupos[grp] || []).push(c);
   });
 
-  let html = '<h3 class="text-sm font-bold text-slate-700 mb-3">Categorías de Gasto</h3><div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+  let html = `<div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 mb-6">
+    <h3 class="text-sm font-bold text-slate-800 mb-2">Sesión Actual</h3>
+    <p class="text-xs text-slate-500 mb-4">Conectado como: <strong class="text-slate-800">${usuarioActual}</strong></p>
+    <button onclick="window.cerrarSesion()" class="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold px-4 py-2.5 rounded-2xl text-xs transition-all">
+      <i class="fa-solid fa-right-from-bracket mr-1.5"></i> Cerrar Sesión
+    </button>
+  </div>`;
+
+  html += '<h3 class="text-sm font-bold text-slate-700 mb-3">Categorías de Gasto</h3><div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
   for(let grp in grupos) {
     html += `<div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-4">
       <p class="text-sm font-bold text-slate-800 mb-2">${esc(grp)}</p>
@@ -863,4 +999,4 @@ window.togglePorTipo = function() {
   if(document.getElementById('divConfPresupuesto')) document.getElementById('divConfPresupuesto').style.display = esIngreso ? 'none' : 'block';
 }
 
-cargarDashboard();
+verificarAutenticacion();
