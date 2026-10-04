@@ -51,13 +51,6 @@ async function fetchSafe(...nombresPosibles) {
   return { tabla: '', data: [] };
 }
 
-/* REGISTRO DE SERVICE WORKER PARA APP MÓVIL (PWA) */
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW error:', err));
-  });
-}
-
 /* SISTEMA DE LOGIN Y PANTALLA COMPLETA */
 function verificarAutenticacion() {
   let layer = document.getElementById('viewLogin');
