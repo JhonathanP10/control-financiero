@@ -222,7 +222,7 @@ window.cambiarTab = function(tipo) {
   }
 };
 
-/* PERIODO DE TIEMPO (RANGO RESTAURADO) */
+/* PERIODO DE TIEMPO Y FILTROS */
 function calcularRango() {
   const hoy = new Date(), o = periodo.offset;
   let desde, hasta, etiqueta;
@@ -255,11 +255,9 @@ function calcularRango() {
 function pintarChips() {
   document.querySelectorAll('[data-preset]').forEach(b => b.classList.toggle('activo', b.dataset.preset === periodo.preset));
   
-  // Ocultar/Mostrar Rango Personalizado
   const rp = document.getElementById('rangoPersonalizado');
   if(rp) rp.classList.toggle('hidden', periodo.preset !== 'rango');
   
-  // Bloquear flechas de paginación si se usa rango
   const fijo = periodo.preset === 'rango' || periodo.preset === 'todo';
   ['btnAnterior', 'btnSiguiente'].forEach(id => {
     const el = document.getElementById(id);
@@ -269,7 +267,6 @@ function pintarChips() {
 
 function asociarBotonesPeriodo() {
   document.querySelectorAll('[data-preset]').forEach(b => {
-    // Evita asignar doble evento si se recarga
     b.removeEventListener('click', b._listener);
     b._listener = () => {
         periodo.preset = b.dataset.preset; 
@@ -280,7 +277,7 @@ function asociarBotonesPeriodo() {
             const hoy = new Date();
             if (!document.getElementById('fDesde').value) document.getElementById('fDesde').valueAsDate = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
             if (!document.getElementById('fHasta').value) document.getElementById('fHasta').valueAsDate = hoy;
-            return; // Esperar a que el usuario presione Aplicar
+            return;
         }
         cargarDashboard();
     };
@@ -298,13 +295,11 @@ window.aplicarRango = function() {
   cargarDashboard();
 }
 
-/* INYECCIÓN DEL DOM (Evita tener que reescribir index.html manual) */
 document.addEventListener('DOMContentLoaded', () => {
   const hoy = new Date();
   if(document.getElementById('fechaIngreso')) document.getElementById('fechaIngreso').valueAsDate = hoy;
   if(document.getElementById('fechaGasto')) document.getElementById('fechaGasto').valueAsDate = hoy;
 
-  // 1. Inyectar botón de "Rango" si no existe
   const chipContainer = document.querySelector('[data-preset="dia"]')?.parentElement;
   if (chipContainer && !document.querySelector('[data-preset="rango"]')) {
       const btnRango = document.createElement('button');
@@ -314,7 +309,6 @@ document.addEventListener('DOMContentLoaded', () => {
       chipContainer.insertBefore(btnRango, document.getElementById('etiquetaPeriodo'));
   }
 
-  // 2. Inyectar bloque #rangoPersonalizado si no existe
   const headerBox = chipContainer?.parentElement;
   if (headerBox && !document.getElementById('rangoPersonalizado')) {
       const rp = document.createElement('div');
@@ -508,15 +502,36 @@ function procesarYRenderizarDashboard() {
     elRes.className = 'text-[10px] mt-1 font-bold ' + (resPer >= 0 ? 'text-emerald-600' : 'text-rose-600');
   }
 
-  // 3. INYECCIÓN DEL DETALLE DE INGRESOS (RESTAURADO)
+  // 3. INYECCIÓN DEL DETALLE DE INGRESOS (ENTRE SALDO Y PERIODOS)
+  // Primero limpiamos si existe uno viejo creado en el contenedor incorrecto
+  let oldPanel = document.getElementById('panelIngresosCat');
+  if (oldPanel && oldPanel.closest('.mt-4') && !oldPanel.closest('.min-h-\\[140px\\]')) {
+      oldPanel.parentElement.remove();
+  }
+
   let panelIngCat = document.getElementById('panelIngresosCat');
   if (!panelIngCat) {
-      const panelGruposBox = document.getElementById('panelGrupos')?.parentElement;
-      if(panelGruposBox) {
+      const cardIngresos = document.getElementById('periodoIngresos')?.closest('.bg-white');
+      if(cardIngresos && cardIngresos.parentElement) {
+          const gridContainer = cardIngresos.parentElement;
+          
+          // Reajustamos la grilla para que entren 4 elementos bien
+          gridContainer.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4';
+          
+          // Ajustamos Saldo para que no se rompa en Tablet/Móvil
+          const cardSaldo = document.getElementById('saldoDisponible')?.closest('.bg-slate-900');
+          if (cardSaldo) cardSaldo.className = 'bg-slate-900 rounded-3xl p-5 text-white shadow-xl shadow-slate-900/20 relative overflow-hidden flex flex-col justify-between sm:col-span-2 lg:col-span-1 min-h-[140px]';
+
+          // Creamos la nueva tarjeta de Detalle de Ingresos
           const newBox = document.createElement('div');
-          newBox.className = 'bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm mt-4 lg:mt-6';
-          newBox.innerHTML = '<h3 class="text-sm font-bold text-slate-800 mb-4">Ingresos por Categoría</h3><div id="panelIngresosCat" class="flex flex-col gap-3.5"></div>';
-          panelGruposBox.parentElement.appendChild(newBox);
+          newBox.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col min-h-[140px] animate-fade-in';
+          newBox.innerHTML = `
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Ingresos por Categoría</p>
+            <div id="panelIngresosCat" class="flex flex-col gap-1.5 overflow-y-auto scroll-fino pr-1 flex-1"></div>
+          `;
+          
+          // Insertamos exactamente antes de "Ingresos Periodo" (es decir, después de Saldo Histórico)
+          gridContainer.insertBefore(newBox, cardIngresos);
           panelIngCat = document.getElementById('panelIngresosCat');
       }
   }
@@ -528,14 +543,23 @@ function procesarYRenderizarDashboard() {
           const arrIngUser = Object.keys(catsUser).map(c => ({ cat: c, monto: catsUser[c] })).sort((a,b) => b.monto - a.monto);
 
           if(arrIngUser.length > 0) {
-              panelIngCat.innerHTML += `<div class="mb-3"><p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2"><i class="fa-solid fa-user mr-1.5 text-emerald-500"></i>${resp} (${S(ingresosPorResp[resp])})</p></div>`;
+              panelIngCat.innerHTML += `<div class="mb-1 mt-1"><p class="text-[9px] font-bold text-slate-500 uppercase tracking-wider"><i class="fa-solid fa-user mr-1 text-emerald-500"></i>${resp} (${S(ingresosPorResp[resp])})</p></div>`;
               const maxI = arrIngUser[0]?.monto || 1;
               arrIngUser.forEach(i => {
-                  panelIngCat.innerHTML += `<div class="mb-2 pl-3 border-l-2 border-emerald-200"><div class="flex justify-between items-center text-[11px] mb-1"><span class="font-bold text-slate-700">${esc(i.cat)}</span><span class="text-slate-500 font-medium">${S(i.monto)}</span></div><div class="w-full bg-slate-50 rounded-full h-1.5"><div class="bg-emerald-400 h-1.5 rounded-full transition-all" style="width:${(i.monto/maxI)*100}%"></div></div></div>`;
+                  panelIngCat.innerHTML += `
+                  <div class="mb-1.5 pl-2 border-l-2 border-emerald-200">
+                    <div class="flex justify-between items-center text-[10px] mb-0.5">
+                      <span class="font-bold text-slate-700 truncate pr-1">${esc(i.cat)}</span>
+                      <span class="text-slate-500 font-medium">${S(i.monto)}</span>
+                    </div>
+                    <div class="w-full bg-slate-50 rounded-full h-1">
+                      <div class="bg-emerald-400 h-1 rounded-full transition-all" style="width:${(i.monto/maxI)*100}%"></div>
+                    </div>
+                  </div>`;
               });
           }
       });
-      if(panelIngCat.innerHTML === '') panelIngCat.innerHTML = '<p class="text-xs text-slate-400">No hay ingresos registrados en este periodo.</p>';
+      if(panelIngCat.innerHTML === '') panelIngCat.innerHTML = '<p class="text-[10px] text-slate-400 py-2">No hay ingresos registrados en este rango de fechas.</p>';
   }
 
   // 4. RENDERIZAR PRESUPUESTOS Y BARRAS
@@ -616,7 +640,7 @@ function procesarYRenderizarDashboard() {
               </div>
               <div class="text-right flex flex-col justify-center items-end gap-1">
                 <span class="text-[11px] font-bold block ${ing ? 'text-emerald-600' : 'text-slate-800'}">${ing ? '+' : '−'}${S(m.monto)}</span>
-                <span class="text-[9px] font-bold text-slate-300 group-hover:text-sky-500 transition-colors flex items-center gap-1 bg-white group-hover:bg-sky-50 px-1.5 py-0.5 rounded border border-transparent group-hover:border-sky-100"><i class="fa-solid fa-pen"></i> Editar</span>
+                <span class="text-[9px] font-bold text-slate-400 bg-slate-100 hover:bg-sky-50 hover:text-sky-600 hover:border-sky-200 transition-colors flex items-center gap-1 px-2 py-0.5 rounded border border-slate-200"><i class="fa-solid fa-pen"></i> Editar</span>
               </div>
             </div>`;
         });
@@ -908,7 +932,6 @@ window.editarMov = function(id, tipo) {
       selCat.value = item.categoria;
   }
 
-  // Agrega botón rojo de eliminación al final del modal dinámicamente si no existe
   let form = getE('formEdicionMov');
   let btnDel = getE('btnEliminarMov');
   if(form && !btnDel) {
