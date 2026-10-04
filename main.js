@@ -385,7 +385,7 @@ function renderHeaderUsuario() {
     </button>`;
 }
 
-/* LÓGICA PRINCIPAL DEL DASHBOARD Y FILTROS */
+/* LÓGICA PRINCIPAL Y REESTRUCTURACIÓN DE DISEÑO PARA PC */
 function procesarYRenderizarDashboard() {
   const filtro = calcularRango();
   const etiq = document.getElementById('etiquetaPeriodo');
@@ -502,40 +502,144 @@ function procesarYRenderizarDashboard() {
     elRes.className = 'text-[10px] mt-1 font-bold ' + (resPer >= 0 ? 'text-emerald-600' : 'text-rose-600');
   }
 
-  // 3. INYECCIÓN DEL DETALLE DE INGRESOS (ENTRE SALDO Y PERIODOS)
-  // Primero limpiamos si existe uno viejo creado en el contenedor incorrecto
-  let oldPanel = document.getElementById('panelIngresosCat');
-  if (oldPanel && oldPanel.closest('.mt-4') && !oldPanel.closest('.min-h-\\[140px\\]')) {
-      oldPanel.parentElement.remove();
-  }
-
-  let panelIngCat = document.getElementById('panelIngresosCat');
-  if (!panelIngCat) {
-      const cardIngresos = document.getElementById('periodoIngresos')?.closest('.bg-white');
-      if(cardIngresos && cardIngresos.parentElement) {
-          const gridContainer = cardIngresos.parentElement;
+  // 3. ORGANIZACIÓN EN 2 COLUMNAS (FILA SUPERIOR LIMPIA Y FILA INFERIOR EXPUESTA)
+  const viewDash = document.getElementById('viewDash');
+  if (viewDash) {
+      let mainContainer = document.getElementById('dashboardMainGrid');
+      if (!mainContainer) {
+          mainContainer = document.createElement('div');
+          mainContainer.id = 'dashboardMainGrid';
+          mainContainer.className = 'space-y-6';
           
-          // Reajustamos la grilla para que entren 4 elementos bien
-          gridContainer.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4';
-          
-          // Ajustamos Saldo para que no se rompa en Tablet/Móvil
-          const cardSaldo = document.getElementById('saldoDisponible')?.closest('.bg-slate-900');
-          if (cardSaldo) cardSaldo.className = 'bg-slate-900 rounded-3xl p-5 text-white shadow-xl shadow-slate-900/20 relative overflow-hidden flex flex-col justify-between sm:col-span-2 lg:col-span-1 min-h-[140px]';
-
-          // Creamos la nueva tarjeta de Detalle de Ingresos
-          const newBox = document.createElement('div');
-          newBox.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col min-h-[140px] animate-fade-in';
-          newBox.innerHTML = `
-            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Ingresos por Categoría</p>
-            <div id="panelIngresosCat" class="flex flex-col gap-1.5 overflow-y-auto scroll-fino pr-1 flex-1"></div>
-          `;
-          
-          // Insertamos exactamente antes de "Ingresos Periodo" (es decir, después de Saldo Histórico)
-          gridContainer.insertBefore(newBox, cardIngresos);
-          panelIngCat = document.getElementById('panelIngresosCat');
+          // Movemos todos los hijos actuales del dashboard dentro de este contenedor organizado
+          while (viewDash.children.length > 1) { // Dejamos el selector de fecha intacto arriba
+              mainContainer.appendChild(viewDash.children[1]);
+          }
+          viewDash.appendChild(mainContainer);
       }
+
+      // Fila 1: Las 4 tarjetas de resumen horizontal limpias
+      let filaSuperior = document.getElementById('dashFilaSuperior');
+      if (!filaSuperior) {
+          filaSuperior = document.createElement('div');
+          filaSuperior.id = 'dashFilaSuperior';
+          filaSuperior.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4';
+          mainContainer.prepend(filaSuperior);
+      }
+
+      // Tarjeta 1: Saldo Histórico
+      let cardSaldo = document.getElementById('cardSaldoHistorico');
+      if (!cardSaldo) {
+          cardSaldo = document.createElement('div');
+          cardSaldo.id = 'cardSaldoHistorico';
+          cardSaldo.className = 'bg-slate-900 rounded-3xl p-5 text-white shadow-xl shadow-slate-900/20 relative overflow-hidden flex flex-col justify-between min-h-[150px]';
+          cardSaldo.innerHTML = `
+            <div class="absolute -right-4 -top-4 text-slate-800/50 text-7xl"><i class="fa-solid fa-vault"></i></div>
+            <div class="relative z-10">
+              <p class="text-sky-300 text-[10px] font-bold uppercase tracking-wider mb-1">Saldo Histórico</p>
+              <h3 class="text-3xl font-extrabold tracking-tight" id="saldoDisponible">${S(saldoHist)}</h3>
+            </div>
+            <div class="relative z-10 grid grid-cols-2 gap-2 text-[10px] mt-3 pt-3 border-t border-slate-800">
+              <div class="bg-white/10 p-2 rounded-xl backdrop-blur-sm">
+                <p class="text-slate-300 font-bold mb-0.5">Jhonathan</p>
+                <p class="font-bold text-white" id="jhoSaldo">${S(statsResp['Jhonathan'].in - statsResp['Jhonathan'].out)}</p>
+              </div>
+              <div class="bg-white/10 p-2 rounded-xl backdrop-blur-sm">
+                <p class="text-slate-300 font-bold mb-0.5">Sindy</p>
+                <p class="font-bold text-white" id="sinSaldo">${S(statsResp['Sindy'].in - statsResp['Sindy'].out)}</p>
+              </div>
+            </div>`;
+          filaSuperior.appendChild(cardSaldo);
+      }
+
+      // Tarjeta 2: Ingresos por Categoría (Ubicado entre Saldo e Ingresos Periodo)
+      let cardIngCat = document.getElementById('cardIngresosCat');
+      if (!cardIngCat) {
+          cardIngCat = document.createElement('div');
+          cardIngCat.id = 'cardIngresosCat';
+          cardIngCat.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col min-h-[150px]';
+          cardIngCat.innerHTML = `
+            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Ingresos por Categoría</p>
+            <div id="panelIngresosCat" class="flex flex-col gap-1.5 overflow-y-auto scroll-fino pr-1 flex-1 max-h-36"></div>`;
+          filaSuperior.appendChild(cardIngCat);
+      }
+
+      // Tarjeta 3: Ingresos Periodo
+      let cardIngPer = document.getElementById('cardIngresosPeriodo');
+      if (!cardIngPer) {
+          cardIngPer = document.createElement('div');
+          cardIngPer.id = 'cardIngresosPeriodo';
+          cardIngPer.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col justify-between min-h-[150px] relative overflow-hidden';
+          cardIngPer.innerHTML = `
+            <div class="absolute right-0 top-0 w-16 h-16 bg-emerald-50 rounded-bl-full flex items-start justify-end p-3"><i class="fa-solid fa-arrow-down text-emerald-500"></i></div>
+            <div>
+              <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Ingresos Periodo</p>
+              <p class="text-xl font-bold text-slate-800 mt-2" id="periodoIngresos">${S(ingresosPeriodo)}</p>
+            </div>
+            <div class="flex justify-between text-[10px] font-semibold text-slate-400 mt-3 bg-slate-50 px-3 py-2 rounded-xl">
+              <span id="periodoJhoIn">Jho: S/ 0.00</span>
+              <span id="periodoSinIn">Sin: S/ 0.00</span>
+            </div>`;
+          filaSuperior.appendChild(cardIngPer);
+      }
+
+      // Tarjeta 4: Gastos Periodo
+      let cardGasPer = document.getElementById('cardGastosPeriodo');
+      if (!cardGasPer) {
+          cardGasPer = document.createElement('div');
+          cardGasPer.id = 'cardGastosPeriodo';
+          cardGasPer.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col justify-between min-h-[150px] relative overflow-hidden';
+          cardGasPer.innerHTML = `
+            <div class="absolute right-0 top-0 w-16 h-16 bg-rose-50 rounded-bl-full flex items-start justify-end p-3"><i class="fa-solid fa-arrow-up text-rose-500"></i></div>
+            <div>
+              <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Gastos Periodo</p>
+              <p class="text-xl font-bold text-slate-800 mt-2" id="periodoGastos">${S(gastosPeriodo)}</p>
+            </div>
+            <div class="mt-3 bg-slate-50 px-3 py-2 rounded-xl flex items-center">
+               <span id="periodoResultado" class="text-[10px] font-bold">Calculando...</span>
+            </div>`;
+          filaSuperior.appendChild(cardGasPer);
+      }
+
+      // Fila Inferior (2 Columnas perfectas para PC: Izquierda Presupuestos/Grupos, Derecha Movimientos Recientes)
+      let filaInferior = document.getElementById('dashFilaInferior');
+      if (!filaInferior) {
+          filaInferior = document.createElement('div');
+          filaInferior.id = 'dashFilaInferior';
+          filaInferior.className = 'grid grid-cols-1 lg:grid-cols-3 gap-6';
+          mainContainer.appendChild(filaInferior);
+      }
+
+      // Columna Izquierda (2 spans en LG): Presupuestos y Grupos
+      let colIzq = document.getElementById('dashColIzquierda');
+      if (!colIzq) {
+          colIzq = document.createElement('div');
+          colIzq.id = 'dashColIzquierda';
+          colIzq.className = 'lg:col-span-2 space-y-6';
+          filaInferior.appendChild(colIzq);
+      }
+
+      // Columna Derecha (1 span en LG): Movimientos Recientes bajados y amplios
+      let colDer = document.getElementById('dashColDerecha');
+      if (!colDer) {
+          colDer = document.createElement('div');
+          colDer.id = 'dashColDerecha';
+          colDer.className = 'lg:col-span-1 space-y-6';
+          filaInferior.appendChild(colDer);
+      }
+
+      // Asignar elementos a sus columnas correspondientes
+      const boxPresupuestos = document.getElementById('panelPresupuestos')?.closest('.bg-white');
+      const boxGrupos = document.getElementById('panelGrupos')?.closest('.bg-white');
+      const boxMovimientos = document.getElementById('panelMovimientos')?.closest('.bg-white');
+
+      if (boxPresupuestos && !colIzq.contains(boxPresupuestos)) colIzq.appendChild(boxPresupuestos);
+      if (boxGrupos && !colIzq.contains(boxGrupos)) colIzq.appendChild(boxGrupos);
+      if (boxMovimientos && !colDer.contains(boxMovimientos)) colDer.appendChild(boxMovimientos);
   }
 
+  // Llenar panel de ingresos por categoría
+  const panelIngCat = document.getElementById('panelIngresosCat');
   if (panelIngCat) {
       panelIngCat.innerHTML = '';
       ['Jhonathan', 'Sindy'].forEach(resp => {
@@ -543,11 +647,11 @@ function procesarYRenderizarDashboard() {
           const arrIngUser = Object.keys(catsUser).map(c => ({ cat: c, monto: catsUser[c] })).sort((a,b) => b.monto - a.monto);
 
           if(arrIngUser.length > 0) {
-              panelIngCat.innerHTML += `<div class="mb-1 mt-1"><p class="text-[9px] font-bold text-slate-500 uppercase tracking-wider"><i class="fa-solid fa-user mr-1 text-emerald-500"></i>${resp} (${S(ingresosPorResp[resp])})</p></div>`;
+              panelIngCat.innerHTML += `<div class="mb-0.5"><p class="text-[9px] font-bold text-slate-500 uppercase tracking-wider"><i class="fa-solid fa-user mr-1 text-emerald-500"></i>${resp} (${S(ingresosPorResp[resp])})</p></div>`;
               const maxI = arrIngUser[0]?.monto || 1;
               arrIngUser.forEach(i => {
                   panelIngCat.innerHTML += `
-                  <div class="mb-1.5 pl-2 border-l-2 border-emerald-200">
+                  <div class="mb-1 pl-2 border-l-2 border-emerald-200">
                     <div class="flex justify-between items-center text-[10px] mb-0.5">
                       <span class="font-bold text-slate-700 truncate pr-1">${esc(i.cat)}</span>
                       <span class="text-slate-500 font-medium">${S(i.monto)}</span>
@@ -559,7 +663,7 @@ function procesarYRenderizarDashboard() {
               });
           }
       });
-      if(panelIngCat.innerHTML === '') panelIngCat.innerHTML = '<p class="text-[10px] text-slate-400 py-2">No hay ingresos registrados en este rango de fechas.</p>';
+      if(panelIngCat.innerHTML === '') panelIngCat.innerHTML = '<p class="text-[10px] text-slate-400 py-2">Sin ingresos en este rango.</p>';
   }
 
   // 4. RENDERIZAR PRESUPUESTOS Y BARRAS
@@ -613,7 +717,7 @@ function procesarYRenderizarDashboard() {
     }
   }
 
-  // 6. RENDERIZAR MOVIMIENTOS CON BOTÓN VISIBLE DE EDITAR
+  // 6. RENDERIZAR MOVIMIENTOS RECIENTES AMPLIOS
   const panelMov = document.getElementById('panelMovimientos');
   if(panelMov) {
     panelMov.innerHTML = '';
@@ -627,7 +731,7 @@ function procesarYRenderizarDashboard() {
     if (movimientos.length === 0) {
         panelMov.innerHTML = '<p class="text-[11px] text-slate-400 py-2">No hay movimientos registrados en este rango.</p>';
     } else {
-        movimientos.slice(0, 40).forEach(m => {
+        movimientos.slice(0, 50).forEach(m => {
           const ing = m.tipo === 'Ingreso';
           panelMov.innerHTML += `
             <div class="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50 rounded-lg px-2 -mx-2 transition-colors group" onclick="editarMov(${m.id}, '${m.tipo}')">
@@ -904,7 +1008,7 @@ window.enviarIngreso = async function(e) {
   }
 }
 
-/* EDICIÓN Y ELIMINACIÓN REFORZADA (AHORA CON BOTÓN ROJO DE BORRAR) */
+/* EDICIÓN Y ELIMINACIÓN */
 window.eliminarMov = async function(id, tipo) {
   if (!confirm('¿Seguro que deseas eliminar este registro permanentemente?')) return;
   const tabla = tipo === 'Gasto' ? 'gastos' : 'ingresos';
@@ -1009,6 +1113,10 @@ function renderConfiguracion() {
   }
   html += '</div>';
   cont.innerHTML = html;
+}
+
+window.guardarCategoria = async function5(e) {
+  if(e) e.preventDefault();
 }
 
 window.guardarCategoria = async function(e) {
