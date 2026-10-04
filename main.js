@@ -514,7 +514,7 @@ function renderFondos() {
   contenedor.innerHTML = html;
 }
 
-/* MÓDULO DE CRÉDITOS PENDIENTES CON DESGLOSE DETALLADO Y DESPLEGABLES */
+/* MÓDULO DE CRÉDITOS PENDIENTES CON SEGURO DESGRAVAMEN REAL */
 window.cargarModuloCreditosDetallado = async function() {
   const contenedor = document.getElementById('viewDeudas');
   if(!contenedor) return;
@@ -529,7 +529,7 @@ window.cargarModuloCreditosDetallado = async function() {
     <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
       <div>
         <h2 class="text-lg font-bold text-slate-800">Control Desglosado de Créditos</h2>
-        <p class="text-xs text-slate-500">Capital, intereses y seguros pagados vs pendientes por cada entidad.</p>
+        <p class="text-xs text-slate-500">Capital, intereses y seguros de desgravamen reales por cada entidad.</p>
       </div>
     </div>
     <div class="space-y-6">`;
@@ -541,12 +541,10 @@ window.cargarModuloCreditosDetallado = async function() {
       let totalCuotas = cuotas.length;
       let pagadasCount = 0;
 
-      // Desglose Pagados
       let capitalPagado = 0;
       let interesPagado = 0;
       let seguroPagado = 0;
 
-      // Desglose Pendientes
       let capitalPendiente = 0;
       let interesPendiente = 0;
       let seguroPendiente = 0;
@@ -555,29 +553,20 @@ window.cargarModuloCreditosDetallado = async function() {
           const pag = (c.pagado || c.estado || '').toString().toLowerCase().trim();
           const esPagado = pag === 'pagado' || pag === 'si' || pag === 'sí' || pag === 'true' || pag === '1' || c.pagado === true || pag === 'fondo';
 
+          // Leyendo columnas reales de la BD
           const cap = Number(c.capital || c.amortizacion || c.monto_capital || 0);
           const inte = Number(c.interes || c.monto_interes || 0);
-          const segu = Number(c.seguro || c.monto_seguro || 0);
-          
-          // Si no están separadas las columnas pero viene el monto general, estimamos o tomamos los campos directos
-          const montoTotal = Number(c.monto || c.cuota || 0);
-          let cVal = cap, iVal = inte, sVal = segu;
-          if (cVal === 0 && iVal === 0 && sVal === 0 && montoTotal > 0) {
-              // Asignación por defecto si la BD solo guarda monto total
-              cVal = montoTotal * 0.8;
-              iVal = montoTotal * 0.15;
-              sVal = montoTotal * 0.05;
-          }
+          const segu = Number(c.seguro_desgravamen || c.seguro || c.monto_seguro || 0);
 
           if (esPagado) {
               pagadasCount++;
-              capitalPagado += cVal;
-              interesPagado += iVal;
-              seguroPagado += sVal;
+              capitalPagado += cap;
+              interesPagado += inte;
+              seguroPagado += segu;
           } else {
-              capitalPendiente += cVal;
-              interesPendiente += iVal;
-              seguroPendiente += sVal;
+              capitalPendiente += cap;
+              interesPendiente += inte;
+              seguroPendiente += segu;
           }
       });
 
@@ -606,7 +595,7 @@ window.cargarModuloCreditosDetallado = async function() {
                 <div class="space-y-1.5 text-xs">
                     <div class="flex justify-between text-slate-600"><span>• Capital amortizado:</span> <span class="font-semibold">${S(capitalPagado)}</span></div>
                     <div class="flex justify-between text-slate-600"><span>• Intereses pagados:</span> <span class="font-semibold">${S(interesPagado)}</span></div>
-                    <div class="flex justify-between text-slate-600"><span>• Seguros pagados:</span> <span class="font-semibold">${S(seguroPagado)}</span></div>
+                    <div class="flex justify-between text-slate-600"><span>• Seguro desgravamen pagado:</span> <span class="font-semibold">${S(seguroPagado)}</span></div>
                 </div>
               </div>
 
@@ -619,7 +608,7 @@ window.cargarModuloCreditosDetallado = async function() {
                 <div class="space-y-1.5 text-xs">
                     <div class="flex justify-between text-slate-600"><span>• Capital pendiente:</span> <span class="font-semibold">${S(capitalPendiente)}</span></div>
                     <div class="flex justify-between text-slate-600"><span>• Intereses pendientes:</span> <span class="font-semibold">${S(interesPendiente)}</span></div>
-                    <div class="flex justify-between text-slate-600"><span>• Seguros pendientes:</span> <span class="font-semibold">${S(seguroPendiente)}</span></div>
+                    <div class="flex justify-between text-slate-600"><span>• Seguro desgravamen pendiente:</span> <span class="font-semibold">${S(seguroPendiente)}</span></div>
                 </div>
               </div>
           </div>
@@ -637,11 +626,15 @@ window.cargarModuloCreditosDetallado = async function() {
           const esPagado = pag === 'pagado' || pag === 'si' || pag === 'sí' || pag === 'true' || pag === '1' || c.pagado === true || pag === 'fondo';
           const montoCuota = Number(c.monto || c.cuota || 0);
           const fechaCuota = c.proximo_vencimiento || c.vencimiento || c.fecha || 'Sin fecha';
+          const capC = Number(c.capital || c.amortizacion || 0);
+          const intC = Number(c.interes || 0);
+          const segC = Number(c.seguro_desgravamen || 0);
 
           html += `<div class="bg-white border border-slate-200/80 rounded-xl p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
               <div>
                 <span class="font-bold text-slate-800">Cuota #${idx + 1}</span>
                 <span class="text-slate-400 text-[11px] ml-2">Vence: ${fechaCuota.substring(0, 10)}</span>
+                <div class="text-[10px] text-slate-500 mt-1">Cap: ${S(capC)} | Int: ${S(intC)} | Seg: ${S(segC)}</div>
               </div>
               <div class="flex items-center gap-4">
                 <div class="text-right">
