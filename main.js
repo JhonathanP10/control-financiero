@@ -112,7 +112,6 @@ window.ejecutarLogin = async function(e) {
       throw new Error('Contraseña incorrecta.');
     }
 
-    // Validación de clave genérica (Ej: '1234')
     if (cla === '1234') {
       btn.innerText = 'Ingresar al Sistema';
       btn.disabled = false;
@@ -950,10 +949,12 @@ function renderConfiguracion() {
     if(c.tipo === 'Gasto' || c.tipo === 'gasto') (grupos[grp] = grupos[grp] || []).push(c);
   });
 
-  let html = `<div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 mb-6">
-    <h3 class="text-sm font-bold text-slate-800 mb-2">Sesión Actual</h3>
-    <p class="text-xs text-slate-500 mb-4">Conectado como: <strong class="text-slate-800">${usuarioActual}</strong></p>
-    <button onclick="window.cerrarSesion()" class="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold px-4 py-2.5 rounded-2xl text-xs transition-all">
+  let html = `<div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div>
+      <h3 class="text-sm font-bold text-slate-800 mb-1">Sesión Actual</h3>
+      <p class="text-xs text-slate-500">Conectado como: <strong class="text-slate-800">${usuarioActual}</strong></p>
+    </div>
+    <button onclick="window.cerrarSesion()" class="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold px-4 py-2.5 rounded-2xl text-xs transition-all shadow-sm">
       <i class="fa-solid fa-right-from-bracket mr-1.5"></i> Cerrar Sesión
     </button>
   </div>`;
