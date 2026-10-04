@@ -323,10 +323,57 @@ window.cargarDashboard = async function() {
   }
 }
 
+/* FUNCIÓN PARA ELIMINAR LA TARJETA DE 'CAMINO SIN DEUDAS' HARCODEADA */
+function ocultarModulosSinUso() {
+    // Busca y elimina el div que contenga el texto "Camino sin deudas"
+    const elementos = Array.from(document.querySelectorAll('h2, h3, div, span, p')).filter(el => el.textContent && el.textContent.trim() === 'Camino sin deudas');
+    elementos.forEach(el => {
+        // Seleccionamos la tarjeta contenedora que usualmente tiene la clase de fondo blanco y sombra
+        const targetBox = el.closest('.bg-white') || el.parentElement.parentElement;
+        if (targetBox) {
+            targetBox.style.display = 'none';
+        }
+    });
+}
+
+/* FUNCIÓN PARA MOSTRAR EL BOTÓN DE CERRAR SESIÓN SIEMPRE VISIBLE EN EL PANEL */
+function renderHeaderUsuario() {
+  const dashView = document.getElementById('viewDash');
+  if (!dashView || !usuarioActual) return;
+
+  let headerDash = document.getElementById('headerDashUsuario');
+  if (!headerDash) {
+      headerDash = document.createElement('div');
+      headerDash.id = 'headerDashUsuario';
+      headerDash.className = 'flex justify-between items-center bg-white p-4 rounded-3xl border border-slate-200 shadow-sm mb-6 w-full';
+      // Insertarlo justo al principio del Dashboard
+      dashView.prepend(headerDash);
+  }
+  
+  headerDash.innerHTML = `
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center font-bold text-lg">
+        ${usuarioActual.charAt(0).toUpperCase()}
+      </div>
+      <div>
+        <h3 class="text-sm font-bold text-slate-800">Hola, ${usuarioActual}</h3>
+        <p class="text-[10px] text-slate-500">Sesión activa en el Panel</p>
+      </div>
+    </div>
+    <button onclick="window.cerrarSesion()" class="flex items-center gap-2 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold px-4 py-2.5 rounded-xl text-xs transition-all shadow-sm">
+      <i class="fa-solid fa-right-from-bracket"></i> <span class="hidden sm:inline">Cerrar Sesión</span>
+    </button>
+  `;
+}
+
 function procesarYRenderizarDashboard() {
   const filtro = calcularRango();
   const etiq = document.getElementById('etiquetaPeriodo');
   if(etiq) etiq.innerText = filtro.etiqueta;
+
+  // Insertar cabecera visible y ocultar las tarjetas en desuso del HTML
+  renderHeaderUsuario();
+  ocultarModulosSinUso();
 
   const selGasto = document.getElementById('categoriaGasto');
   const selIng = document.getElementById('categoriaIngreso');
@@ -545,10 +592,13 @@ function renderFondos() {
           if(targetBox && targetBox.parentElement) {
               targetBox.parentElement.replaceChild(contenedor, targetBox);
           } else {
-              dashView.prepend(contenedor);
+              dashView.append(contenedor);
           }
       } else {
-          dashView.prepend(contenedor);
+          // Lo añadimos después del encabezado de usuario si existe
+          const header = document.getElementById('headerDashUsuario');
+          if(header && header.nextSibling) dashView.insertBefore(contenedor, header.nextSibling);
+          else dashView.appendChild(contenedor);
       }
   }
   
@@ -560,7 +610,7 @@ function renderFondos() {
       { titulo: 'BBVA TARJETA', clave: 'bbva_tarjeta', nombreCat: 'bbva tarjeta' }
   ];
 
-  let html = '<h3 class="text-sm font-bold text-slate-700 mb-3">Pagos pendientes</h3><div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
+  let html = '<h3 class="text-sm font-bold text-slate-700 mb-3">Pagos pendientes de tus créditos</h3><div class="grid grid-cols-1 md:grid-cols-3 gap-4">';
 
   configCreditos.forEach(cred => {
       const datosObj = cacheDatos[cred.clave] || {tabla:'', data:[]};
@@ -949,17 +999,7 @@ function renderConfiguracion() {
     if(c.tipo === 'Gasto' || c.tipo === 'gasto') (grupos[grp] = grupos[grp] || []).push(c);
   });
 
-  let html = `<div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-    <div>
-      <h3 class="text-sm font-bold text-slate-800 mb-1">Sesión Actual</h3>
-      <p class="text-xs text-slate-500">Conectado como: <strong class="text-slate-800">${usuarioActual}</strong></p>
-    </div>
-    <button onclick="window.cerrarSesion()" class="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold px-4 py-2.5 rounded-2xl text-xs transition-all shadow-sm">
-      <i class="fa-solid fa-right-from-bracket mr-1.5"></i> Cerrar Sesión
-    </button>
-  </div>`;
-
-  html += '<h3 class="text-sm font-bold text-slate-700 mb-3">Categorías de Gasto</h3><div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+  let html = '<h3 class="text-sm font-bold text-slate-700 mb-3">Categorías de Gasto</h3><div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
   for(let grp in grupos) {
     html += `<div class="bg-white rounded-3xl border border-slate-100 shadow-sm p-4">
       <p class="text-sm font-bold text-slate-800 mb-2">${esc(grp)}</p>
