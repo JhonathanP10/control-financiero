@@ -514,7 +514,7 @@ function renderFondos() {
   contenedor.innerHTML = html;
 }
 
-/* MÓDULO DE CRÉDITOS PENDIENTES CON SEGURO DESGRAVAMEN REAL */
+/* MÓDULO DE CRÉDITOS PENDIENTES CON CUOTAS ORDENADAS POR FECHA */
 window.cargarModuloCreditosDetallado = async function() {
   const contenedor = document.getElementById('viewDeudas');
   if(!contenedor) return;
@@ -536,7 +536,14 @@ window.cargarModuloCreditosDetallado = async function() {
 
   configCreditos.forEach(cred => {
       const datosObj = cacheDatos[cred.clave] || {tabla:'', data:[]};
-      const cuotas = datosObj.data || [];
+      // Hacemos una copia para ordenar las cuotas cronológicamente por fecha de vencimiento
+      let cuotas = [...(datosObj.data || [])];
+      
+      cuotas.sort((a, b) => {
+          const fA = a.proximo_vencimiento || a.vencimiento || a.fecha || '9999-12-31';
+          const fB = b.proximo_vencimiento || b.vencimiento || b.fecha || '9999-12-31';
+          return fA > fB ? 1 : (fA < fB ? -1 : 0);
+      });
 
       let totalCuotas = cuotas.length;
       let pagadasCount = 0;
@@ -553,7 +560,6 @@ window.cargarModuloCreditosDetallado = async function() {
           const pag = (c.pagado || c.estado || '').toString().toLowerCase().trim();
           const esPagado = pag === 'pagado' || pag === 'si' || pag === 'sí' || pag === 'true' || pag === '1' || c.pagado === true || pag === 'fondo';
 
-          // Leyendo columnas reales de la BD
           const cap = Number(c.capital || c.amortizacion || c.monto_capital || 0);
           const inte = Number(c.interes || c.monto_interes || 0);
           const segu = Number(c.seguro_desgravamen || c.seguro || c.monto_seguro || 0);
@@ -613,10 +619,10 @@ window.cargarModuloCreditosDetallado = async function() {
               </div>
           </div>
 
-          <!-- Desplegable con detalle de cuotas -->
+          <!-- Desplegable con detalle de cuotas ordenadas por fecha -->
           <details class="group border border-slate-100 rounded-2xl bg-slate-50/50 overflow-hidden">
             <summary class="flex justify-between items-center p-4 cursor-pointer text-xs font-bold text-slate-700 select-none hover:bg-slate-100/50 transition-all">
-                <span><i class="fa-solid fa-list-ul mr-2 text-sky-600"></i> Ver cronograma y desglose de cuotas (${totalCuotas})</span>
+                <span><i class="fa-solid fa-list-ul mr-2 text-sky-600"></i> Ver cronograma ordenado por fecha (${totalCuotas})</span>
                 <i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform text-slate-400"></i>
             </summary>
             <div class="p-4 pt-0 space-y-2 max-h-60 overflow-y-auto">`;
