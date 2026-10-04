@@ -14,7 +14,7 @@ let cacheDatos = {
   bbva_tarjeta: {tabla:'bbva_tarjeta', data:[]} 
 };
 
-// Formateadores y utilidades ultrarrápidas
+// Formateadores rápidos
 const S = n => 'S/ ' + (Number(n) || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const iso = d => d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
@@ -51,7 +51,7 @@ async function fetchSafe(...nombresPosibles) {
   return { tabla: '', data: [] };
 }
 
-/* REGISTRO DE SERVICE WORKER PARA APP MÓVIL (PWA / APK) */
+/* REGISTRO DE SERVICE WORKER PARA APP MÓVIL (PWA) */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW error:', err));
@@ -158,22 +158,16 @@ window.mostrarModalCambioClave = function(usu) {
 window.actualizarClaveNueva = async function(e, usu) {
   if(e) e.preventDefault();
   const nueva = document.getElementById('nuevaClaveInput').value;
-  if(!nueva || nueva.length < 3) {
-    toast('Ingresa una clave válida', false);
-    return;
-  }
+  if(!nueva || nueva.length < 3) { toast('Ingresa una clave válida', false); return; }
 
   try {
     const { error } = await supabase.from('usuarios').update({ clave: nueva }).eq('usuario', usu);
     if(error) throw error;
-
     toast('Clave actualizada correctamente', true);
     usuarioActual = usu;
     localStorage.setItem('usuario_app', usu);
     verificarAutenticacion();
-  } catch(err) {
-    toast('Error: ' + err.message, false);
-  }
+  } catch(err) { toast('Error: ' + err.message, false); }
 }
 
 window.cerrarSesion = function() {
@@ -193,7 +187,6 @@ function mostrarVista(vista) {
     const activo = b.dataset.vista === vista || (vista === 'creditos' && b.dataset.vista === 'deudas');
     b.classList.toggle('activo', activo);
   });
-  
   const titulos = { dash: 'Panel General', registro: 'Nuevo Registro', creditos: 'Créditos Pendientes', config: 'Ajustes' };
   const titMovil = document.getElementById('tituloVistaMovil');
   if(titMovil) titMovil.innerText = titulos[vista];
@@ -229,7 +222,7 @@ window.cambiarTab = function(tipo) {
   }
 };
 
-/* PERIODO DE TIEMPO */
+/* PERIODO DE TIEMPO (RANGO RESTAURADO) */
 function calcularRango() {
   const hoy = new Date(), o = periodo.offset;
   let desde, hasta, etiqueta;
@@ -249,6 +242,10 @@ function calcularRango() {
   } else if (periodo.preset === 'anio') {
     desde = new Date(hoy.getFullYear() + o, 0, 1); hasta = new Date(hoy.getFullYear() + o, 11, 31);
     etiqueta = 'Año ' + (hoy.getFullYear() + o);
+  } else if (periodo.preset === 'rango') {
+    desde = periodo.desde ? new Date(periodo.desde + 'T00:00:00') : new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    hasta = periodo.hasta ? new Date(periodo.hasta + 'T00:00:00') : hoy;
+    etiqueta = dm(desde) + ' – ' + dm(hasta);
   } else {
     desde = new Date(2000, 0, 1); hasta = new Date(hoy.getFullYear() + 5, 11, 31); etiqueta = 'Historial';
   }
@@ -257,18 +254,81 @@ function calcularRango() {
 
 function pintarChips() {
   document.querySelectorAll('[data-preset]').forEach(b => b.classList.toggle('activo', b.dataset.preset === periodo.preset));
+  
+  // Ocultar/Mostrar Rango Personalizado
+  const rp = document.getElementById('rangoPersonalizado');
+  if(rp) rp.classList.toggle('hidden', periodo.preset !== 'rango');
+  
+  // Bloquear flechas de paginación si se usa rango
+  const fijo = periodo.preset === 'rango' || periodo.preset === 'todo';
+  ['btnAnterior', 'btnSiguiente'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) { el.disabled = fijo; el.classList.toggle('opacity-30', fijo); }
+  });
 }
 
-document.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => {
-  periodo.preset = b.dataset.preset; periodo.offset = 0; pintarChips(); cargarDashboard();
-}));
+function asociarBotonesPeriodo() {
+  document.querySelectorAll('[data-preset]').forEach(b => {
+    // Evita asignar doble evento si se recarga
+    b.removeEventListener('click', b._listener);
+    b._listener = () => {
+        periodo.preset = b.dataset.preset; 
+        periodo.offset = 0; 
+        pintarChips(); 
+        
+        if (periodo.preset === 'rango') {
+            const hoy = new Date();
+            if (!document.getElementById('fDesde').value) document.getElementById('fDesde').valueAsDate = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+            if (!document.getElementById('fHasta').value) document.getElementById('fHasta').valueAsDate = hoy;
+            return; // Esperar a que el usuario presione Aplicar
+        }
+        cargarDashboard();
+    };
+    b.addEventListener('click', b._listener);
+  });
+}
 
-window.moverPeriodo = function(p) { periodo.offset += p; cargarDashboard(); }
+window.moverPeriodo = function(p) { if(periodo.preset==='rango') return; periodo.offset += p; cargarDashboard(); }
 
+window.aplicarRango = function() {
+  const d = document.getElementById('fDesde').value;
+  const h = document.getElementById('fHasta').value;
+  if (!d || !h) { toast('Elige ambas fechas', false); return; }
+  periodo.desde = d; periodo.hasta = h;
+  cargarDashboard();
+}
+
+/* INYECCIÓN DEL DOM (Evita tener que reescribir index.html manual) */
 document.addEventListener('DOMContentLoaded', () => {
   const hoy = new Date();
   if(document.getElementById('fechaIngreso')) document.getElementById('fechaIngreso').valueAsDate = hoy;
   if(document.getElementById('fechaGasto')) document.getElementById('fechaGasto').valueAsDate = hoy;
+
+  // 1. Inyectar botón de "Rango" si no existe
+  const chipContainer = document.querySelector('[data-preset="dia"]')?.parentElement;
+  if (chipContainer && !document.querySelector('[data-preset="rango"]')) {
+      const btnRango = document.createElement('button');
+      btnRango.dataset.preset = 'rango';
+      btnRango.className = 'chip px-3.5 py-1.5 rounded-xl text-[11px] font-bold flex-shrink-0 transition-colors';
+      btnRango.innerText = 'Rango';
+      chipContainer.insertBefore(btnRango, document.getElementById('etiquetaPeriodo'));
+  }
+
+  // 2. Inyectar bloque #rangoPersonalizado si no existe
+  const headerBox = chipContainer?.parentElement;
+  if (headerBox && !document.getElementById('rangoPersonalizado')) {
+      const rp = document.createElement('div');
+      rp.id = 'rangoPersonalizado';
+      rp.className = 'hidden mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-end gap-3 animate-fade-in';
+      rp.innerHTML = `
+        <div><label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 block">Desde</label><input type="date" id="fDesde" class="bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-bold text-slate-700"></div>
+        <div><label class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 block">Hasta</label><input type="date" id="fHasta" class="bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs font-bold text-slate-700"></div>
+        <button onclick="window.aplicarRango()" class="bg-sky-500 active:scale-95 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md transition-transform flex-shrink-0">Aplicar</button>
+      `;
+      headerBox.appendChild(rp);
+  }
+
+  asociarBotonesPeriodo();
   pintarChips();
   verificarAutenticacion();
 });
@@ -291,7 +351,7 @@ window.cargarDashboard = async function() {
 
     procesarYRenderizarDashboard();
   } catch (err) {
-    toast('Error al actualizar datos', false);
+    toast('Error al sincronizar datos. Verifica tu conexión.', false);
   }
 }
 
@@ -326,12 +386,12 @@ function renderHeaderUsuario() {
         <p class="text-[10px] text-slate-400">Sesión activa</p>
       </div>
     </div>
-    <button onclick="window.cerrarSesion()" class="bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-600 font-bold px-3.5 py-2 rounded-xl text-xs transition-all flex items-center gap-1.5">
+    <button onclick="window.cerrarSesion()" class="bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-600 font-bold px-3.5 py-2 rounded-xl text-xs transition-all flex items-center gap-1.5 border border-rose-100">
       <i class="fa-solid fa-right-from-bracket"></i> <span class="hidden sm:inline">Salir</span>
     </button>`;
 }
 
-/* LÓGICA CORE - CORREGIDA Y RESTAURADA (CÁLCULO DEL MES Y PRESUPUESTOS) */
+/* LÓGICA PRINCIPAL DEL DASHBOARD Y FILTROS */
 function procesarYRenderizarDashboard() {
   const filtro = calcularRango();
   const etiq = document.getElementById('etiquetaPeriodo');
@@ -391,18 +451,19 @@ function procesarYRenderizarDashboard() {
   if(document.getElementById('saldoDisponible')) document.getElementById('saldoDisponible').innerText = S(saldoHist);
   if(document.getElementById('sbSaldo')) document.getElementById('sbSaldo').innerText = S(saldoHist);
   if(document.getElementById('sbSaldoMovil')) document.getElementById('sbSaldoMovil').innerText = S(saldoHist);
-  if(document.getElementById('sbIngresos')) document.getElementById('sbIngresos').innerText = totalIngresos.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  if(document.getElementById('sbGastos')) document.getElementById('sbGastos').innerText = totalGastos.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if(document.getElementById('sbIngresos')) document.getElementById('sbIngresos').innerText = totalIngresos.toLocaleString('es-PE', { minimumFractionDigits: 2 });
+  if(document.getElementById('sbGastos')) document.getElementById('sbGastos').innerText = totalGastos.toLocaleString('es-PE', { minimumFractionDigits: 2 });
 
   if(document.getElementById('jhoSaldo')) document.getElementById('jhoSaldo').innerText = S(statsResp['Jhonathan'].in - statsResp['Jhonathan'].out);
   if(document.getElementById('sinSaldo')) document.getElementById('sinSaldo').innerText = S(statsResp['Sindy'].in - statsResp['Sindy'].out);
 
-  // 2. CÁLCULOS DEL PERIODO (FILTRO DE FECHA)
+  // 2. CÁLCULOS DEL PERIODO FILTRADO
   const fDesdeStr = filtro.desde;
   const fHastaStr = filtro.hasta;
 
   let ingresosPeriodo = 0, gastosPeriodo = 0;
   let gastosPorCat = {}, gastosPorGrupo = {};
+  let ingresosPorRespCat = { 'Jhonathan': {}, 'Sindy': {} };
   let ingresosPorResp = { 'Jhonathan': 0, 'Sindy': 0 };
   let movimientos = [];
 
@@ -410,10 +471,13 @@ function procesarYRenderizarDashboard() {
     const fStr = i.fecha ? i.fecha.substring(0, 10) : '';
     const m = Number(i.monto) || 0;
     const resp = i.responsable || 'Jhonathan';
+    const cat = i.categoria || 'Otros';
     
     if (fStr >= fDesdeStr && fStr <= fHastaStr) {
       ingresosPeriodo += m;
       if(ingresosPorResp[resp] !== undefined) ingresosPorResp[resp] += m;
+      const targetUser = ingresosPorRespCat[resp] ? resp : 'Jhonathan';
+      ingresosPorRespCat[targetUser][cat] = (ingresosPorRespCat[targetUser][cat] || 0) + m;
     }
     movimientos.push({ id: i.id, tipo: 'Ingreso', fecha: i.fecha, categoria: i.categoria, monto: m, responsable: resp, detalle: i.comentario || i.descripcion || '' });
   });
@@ -444,7 +508,37 @@ function procesarYRenderizarDashboard() {
     elRes.className = 'text-[10px] mt-1 font-bold ' + (resPer >= 0 ? 'text-emerald-600' : 'text-rose-600');
   }
 
-  // 3. RENDERIZAR PRESUPUESTOS Y BARRAS
+  // 3. INYECCIÓN DEL DETALLE DE INGRESOS (RESTAURADO)
+  let panelIngCat = document.getElementById('panelIngresosCat');
+  if (!panelIngCat) {
+      const panelGruposBox = document.getElementById('panelGrupos')?.parentElement;
+      if(panelGruposBox) {
+          const newBox = document.createElement('div');
+          newBox.className = 'bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm mt-4 lg:mt-6';
+          newBox.innerHTML = '<h3 class="text-sm font-bold text-slate-800 mb-4">Ingresos por Categoría</h3><div id="panelIngresosCat" class="flex flex-col gap-3.5"></div>';
+          panelGruposBox.parentElement.appendChild(newBox);
+          panelIngCat = document.getElementById('panelIngresosCat');
+      }
+  }
+
+  if (panelIngCat) {
+      panelIngCat.innerHTML = '';
+      ['Jhonathan', 'Sindy'].forEach(resp => {
+          const catsUser = ingresosPorRespCat[resp] || {};
+          const arrIngUser = Object.keys(catsUser).map(c => ({ cat: c, monto: catsUser[c] })).sort((a,b) => b.monto - a.monto);
+
+          if(arrIngUser.length > 0) {
+              panelIngCat.innerHTML += `<div class="mb-3"><p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2"><i class="fa-solid fa-user mr-1.5 text-emerald-500"></i>${resp} (${S(ingresosPorResp[resp])})</p></div>`;
+              const maxI = arrIngUser[0]?.monto || 1;
+              arrIngUser.forEach(i => {
+                  panelIngCat.innerHTML += `<div class="mb-2 pl-3 border-l-2 border-emerald-200"><div class="flex justify-between items-center text-[11px] mb-1"><span class="font-bold text-slate-700">${esc(i.cat)}</span><span class="text-slate-500 font-medium">${S(i.monto)}</span></div><div class="w-full bg-slate-50 rounded-full h-1.5"><div class="bg-emerald-400 h-1.5 rounded-full transition-all" style="width:${(i.monto/maxI)*100}%"></div></div></div>`;
+              });
+          }
+      });
+      if(panelIngCat.innerHTML === '') panelIngCat.innerHTML = '<p class="text-xs text-slate-400">No hay ingresos registrados en este periodo.</p>';
+  }
+
+  // 4. RENDERIZAR PRESUPUESTOS Y BARRAS
   let totalTopeGlobal = 0, totalGastadoGlobal = 0;
   const panelPres = document.getElementById('panelPresupuestos');
   if(panelPres) {
@@ -478,14 +572,14 @@ function procesarYRenderizarDashboard() {
       barraPres.className = porcGlobal > 100 ? 'bg-rose-500 h-1.5 rounded-full transition-all' : (porcGlobal > 75 ? 'bg-amber-500 h-1.5 rounded-full transition-all' : 'bg-sky-500 h-1.5 rounded-full transition-all');
   }
 
-  // 4. RENDERIZAR GASTOS POR GRUPO
+  // 5. RENDERIZAR GASTOS POR GRUPO
   const panelGrp = document.getElementById('panelGrupos');
   if(panelGrp) {
     panelGrp.innerHTML = '';
     const arrGrp = Object.keys(gastosPorGrupo).map(g => ({ grupo: g, monto: gastosPorGrupo[g] })).sort((a,b) => b.monto - a.monto);
     const maxG = arrGrp[0]?.monto || 1;
     if (arrGrp.length === 0 || (arrGrp.length === 1 && arrGrp[0].monto === 0)) {
-        panelGrp.innerHTML = '<p class="text-xs text-slate-400">No hay gastos en este periodo.</p>';
+        panelGrp.innerHTML = '<p class="text-[11px] text-slate-400">No hay gastos en este periodo.</p>';
     } else {
         arrGrp.forEach(g => {
           if (g.monto > 0) {
@@ -495,7 +589,7 @@ function procesarYRenderizarDashboard() {
     }
   }
 
-  // 5. RENDERIZAR MOVIMIENTOS RECIENTES
+  // 6. RENDERIZAR MOVIMIENTOS CON BOTÓN VISIBLE DE EDITAR
   const panelMov = document.getElementById('panelMovimientos');
   if(panelMov) {
     panelMov.innerHTML = '';
@@ -507,12 +601,12 @@ function procesarYRenderizarDashboard() {
     });
 
     if (movimientos.length === 0) {
-        panelMov.innerHTML = '<p class="text-[11px] text-slate-400 py-2">No hay movimientos registrados.</p>';
+        panelMov.innerHTML = '<p class="text-[11px] text-slate-400 py-2">No hay movimientos registrados en este rango.</p>';
     } else {
         movimientos.slice(0, 40).forEach(m => {
           const ing = m.tipo === 'Ingreso';
           panelMov.innerHTML += `
-            <div class="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50 rounded-lg px-2 -mx-2 transition-colors" onclick="editarMov(${m.id}, '${m.tipo}')">
+            <div class="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50 rounded-lg px-2 -mx-2 transition-colors group" onclick="editarMov(${m.id}, '${m.tipo}')">
               <div class="w-8 h-8 rounded-xl flex items-center justify-center ${ing ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'} flex-shrink-0 text-xs font-bold shadow-sm border border-${ing ? 'emerald' : 'rose'}-100">
                 <i class="fa-solid ${ing ? 'fa-arrow-down' : 'fa-arrow-up'}"></i>
               </div>
@@ -520,8 +614,9 @@ function procesarYRenderizarDashboard() {
                 <p class="text-[11px] font-bold text-slate-800 truncate leading-tight">${esc(m.categoria)}</p>
                 <p class="text-[9px] text-slate-400 truncate mt-0.5">${esc(m.fecha ? m.fecha.substring(0,10) : '')} · ${esc(m.responsable)} ${m.detalle ? '· '+esc(m.detalle) : ''}</p>
               </div>
-              <div class="text-right flex flex-col justify-center">
+              <div class="text-right flex flex-col justify-center items-end gap-1">
                 <span class="text-[11px] font-bold block ${ing ? 'text-emerald-600' : 'text-slate-800'}">${ing ? '+' : '−'}${S(m.monto)}</span>
+                <span class="text-[9px] font-bold text-slate-300 group-hover:text-sky-500 transition-colors flex items-center gap-1 bg-white group-hover:bg-sky-50 px-1.5 py-0.5 rounded border border-transparent group-hover:border-sky-100"><i class="fa-solid fa-pen"></i> Editar</span>
               </div>
             </div>`;
         });
@@ -532,7 +627,7 @@ function procesarYRenderizarDashboard() {
   renderFondos();
 }
 
-/* RENDER DE FONDOS Y CRÉDITOS (CORREGIDO LECTURA DE ABONOS) */
+/* RENDER DE FONDOS Y CRÉDITOS */
 function renderFondos() {
   const dashView = document.getElementById('viewDash');
   if(!dashView) return;
@@ -561,7 +656,6 @@ function renderFondos() {
       const cuotas = datosObj.data || [];
       const tablaBd = datosObj.tabla;
       
-      // 1. CÁLCULO DE ABONOS DESDE LA TABLA GASTOS
       let fondoTotal = 0;
       cacheDatos.gastos.forEach(g => {
           const catGasto = (g.categoria || '').toLowerCase().trim();
@@ -593,16 +687,12 @@ function renderFondos() {
           return fA > fB ? 1 : -1;
       });
 
-      // 2. APLICACIÓN DE FONDO DISPONIBLE A LAS CUOTAS
       for (let c of cuotasPendientes) {
           const fVenc = c.proximo_vencimiento || c.vencimiento || c.fecha || '';
           const montoCuota = Number(c.monto || c.cuota || 0);
 
           if (fVenc && fVenc <= hoyIso && fondoDisponible >= montoCuota && montoCuota > 0) {
-              if (tablaBd) {
-                  // Actualizar en supabase en segundo plano
-                  supabase.from(tablaBd).update({ pagado: 'Fondo' }).eq('id', c.id).then();
-              }
+              if (tablaBd) { supabase.from(tablaBd).update({ pagado: 'Fondo' }).eq('id', c.id).then(); }
               fondoDisponible -= montoCuota;
               c.pagado = 'Fondo'; 
           }
@@ -729,7 +819,7 @@ window.cargarModuloCreditosDetallado = async function() {
   contenedor.innerHTML = html;
 }
 
-/* REGISTRO Y EDICIÓN DE GASTOS E INGRESOS */
+/* REGISTRO DE GASTOS E INGRESOS */
 window.enviarGasto = async function(e) {
   if(e) e.preventDefault();
   const btn = document.getElementById('btnGuardarGasto');
@@ -790,6 +880,7 @@ window.enviarIngreso = async function(e) {
   }
 }
 
+/* EDICIÓN Y ELIMINACIÓN REFORZADA (AHORA CON BOTÓN ROJO DE BORRAR) */
 window.eliminarMov = async function(id, tipo) {
   if (!confirm('¿Seguro que deseas eliminar este registro permanentemente?')) return;
   const tabla = tipo === 'Gasto' ? 'gastos' : 'ingresos';
@@ -817,20 +908,18 @@ window.editarMov = function(id, tipo) {
       selCat.value = item.categoria;
   }
 
-  // Agrega botón de eliminación al modal dinámicamente si no existe
+  // Agrega botón rojo de eliminación al final del modal dinámicamente si no existe
   let form = getE('formEdicionMov');
-  if(form && !document.getElementById('btnEliminarMov')) {
-      const btnDel = document.createElement('button');
+  let btnDel = getE('btnEliminarMov');
+  if(form && !btnDel) {
+      btnDel = document.createElement('button');
       btnDel.id = 'btnEliminarMov';
       btnDel.type = 'button';
-      btnDel.className = 'w-full bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold py-3 rounded-xl mt-2 transition-all text-xs';
-      btnDel.innerText = 'Eliminar Registro';
+      btnDel.className = 'w-full bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold py-3.5 rounded-xl mt-2 transition-all text-xs border border-rose-100 flex items-center justify-center gap-2';
+      btnDel.innerHTML = '<i class="fa-solid fa-trash"></i> Eliminar Permanentemente';
       form.appendChild(btnDel);
   }
-  
-  if(document.getElementById('btnEliminarMov')) {
-      document.getElementById('btnEliminarMov').onclick = () => window.eliminarMov(item.id, tipo);
-  }
+  if(btnDel) btnDel.onclick = () => window.eliminarMov(item.id, tipo);
 
   const modal = getE('modalEdicionMovimiento');
   if(modal) { modal.classList.remove('hidden'); modal.classList.add('flex'); }
