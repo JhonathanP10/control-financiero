@@ -74,13 +74,11 @@ function mostrarVista(vista) {
 }
 document.querySelectorAll('.nav-item').forEach(b => b.addEventListener('click', () => mostrarVista(b.dataset.vista)));
 
-// Cambio de pestaña estético mejorado con clases dinámicas para la burbuja
 window.cambiarTab = function(tipo) {
   const esIngreso = String(tipo).toLowerCase().includes('ingreso');
   const fg = document.getElementById('formGasto');
   const fi = document.getElementById('formIngreso');
   
-  // Buscar botones de pestañas por sus textos o clases comunes
   const botonesTab = document.querySelectorAll('button[onclick*="cambiarTab"]');
   botonesTab.forEach(btn => {
     const esBtnIngreso = btn.textContent.toLowerCase().includes('ingreso');
@@ -262,6 +260,7 @@ function procesarYRenderizarDashboard() {
 
   let ingresosPeriodo = 0, gastosPeriodo = 0;
   let gastosPorCat = {}, gastosPorGrupo = {}, ingresosPorCat = {};
+  let ingresosPorResp = { 'Jhonathan': 0, 'Sindy': 0 };
   let movimientos = [];
 
   cacheDatos.ingresos.forEach(i => {
@@ -272,6 +271,8 @@ function procesarYRenderizarDashboard() {
     if (fStr >= fDesdeStr && fStr <= fHastaStr) {
       ingresosPeriodo += m;
       if(statsResp[resp]) statsResp[resp].perIn += m;
+      if(ingresosPorResp[resp] !== undefined) ingresosPorResp[resp] += m;
+      else ingresosPorResp[resp] = m;
       ingresosPorCat[i.categoria] = (ingresosPorCat[i.categoria] || 0) + m;
     }
     movimientos.push({ id: i.id, tipo: 'Ingreso', fecha: i.fecha, categoria: i.categoria, monto: m, responsable: resp, detalle: i.comentario || i.descripcion || '' });
@@ -294,8 +295,10 @@ function procesarYRenderizarDashboard() {
     movimientos.push({ id: g.id, tipo: 'Gasto', fecha: g.fecha, categoria: g.categoria, monto: m, responsable: resp, detalle: g.descripcion || '' });
   });
 
-  if(document.getElementById('periodoJhoIn')) document.getElementById('periodoJhoIn').innerText = 'Jho: ' + S(statsResp['Jhonathan'].perIn);
-  if(document.getElementById('periodoSinIn')) document.getElementById('periodoSinIn').innerText = 'Sin: ' + S(statsResp['Sindy'].perIn);
+  // Mostrar desglose de ingresos por responsable en el período
+  if(document.getElementById('periodoJhoIn')) document.getElementById('periodoJhoIn').innerText = 'Jho: ' + S(ingresosPorResp['Jhonathan'] || 0);
+  if(document.getElementById('periodoSinIn')) document.getElementById('periodoSinIn').innerText = 'Sin: ' + S(ingresosPorResp['Sindy'] || 0);
+
   if(document.getElementById('nombrePeriodo')) document.getElementById('nombrePeriodo').innerText = filtro.etiqueta;
   if(document.getElementById('periodoIngresos')) document.getElementById('periodoIngresos').innerText = S(ingresosPeriodo);
   if(document.getElementById('periodoGastos')) document.getElementById('periodoGastos').innerText = S(gastosPeriodo);
@@ -741,7 +744,7 @@ window.guardarCategoria = async function(e) {
     tipo: getE('confTipo')?.value || 'Gasto',
     grupo: getE('confGrupo')?.value || null,
     categoria: getE('confCategoria')?.value || 'Nueva',
-    presupuesto: parseFloat(getE('confPresupuesto')?.value || 0) / 0 || 0
+    presupuesto: parseFloat(getE('confPresupuesto')?.value || 0) || 0
   };
 
   const { error } = await supabase.from('configuracion').insert([payload]);
