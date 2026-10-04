@@ -259,7 +259,8 @@ function procesarYRenderizarDashboard() {
   const fHastaStr = filtro.hasta;
 
   let ingresosPeriodo = 0, gastosPeriodo = 0;
-  let gastosPorCat = {}, gastosPorGrupo = {}, ingresosPorCat = {};
+  let gastosPorCat = {}, gastosPorGrupo = {};
+  let ingresosPorRespCat = { 'Jhonathan': {}, 'Sindy': {} };
   let ingresosPorResp = { 'Jhonathan': 0, 'Sindy': 0 };
   let movimientos = [];
 
@@ -267,13 +268,17 @@ function procesarYRenderizarDashboard() {
     const fStr = i.fecha ? i.fecha.substring(0, 10) : '';
     const m = Number(i.monto) || 0;
     const resp = i.responsable || 'Jhonathan';
+    const cat = i.categoria || 'Otros';
     
     if (fStr >= fDesdeStr && fStr <= fHastaStr) {
       ingresosPeriodo += m;
       if(statsResp[resp]) statsResp[resp].perIn += m;
       if(ingresosPorResp[resp] !== undefined) ingresosPorResp[resp] += m;
       else ingresosPorResp[resp] = m;
-      ingresosPorCat[i.categoria] = (ingresosPorCat[i.categoria] || 0) + m;
+
+      // Agrupar por usuario y su categoría de ingreso
+      const targetUser = ingresosPorRespCat[resp] ? resp : 'Jhonathan';
+      ingresosPorRespCat[targetUser][cat] = (ingresosPorRespCat[targetUser][cat] || 0) + m;
     }
     movimientos.push({ id: i.id, tipo: 'Ingreso', fecha: i.fecha, categoria: i.categoria, monto: m, responsable: resp, detalle: i.comentario || i.descripcion || '' });
   });
@@ -295,7 +300,6 @@ function procesarYRenderizarDashboard() {
     movimientos.push({ id: g.id, tipo: 'Gasto', fecha: g.fecha, categoria: g.categoria, monto: m, responsable: resp, detalle: g.descripcion || '' });
   });
 
-  // Mostrar desglose de ingresos por responsable en el período
   if(document.getElementById('periodoJhoIn')) document.getElementById('periodoJhoIn').innerText = 'Jho: ' + S(ingresosPorResp['Jhonathan'] || 0);
   if(document.getElementById('periodoSinIn')) document.getElementById('periodoSinIn').innerText = 'Sin: ' + S(ingresosPorResp['Sindy'] || 0);
 
@@ -344,14 +348,27 @@ function procesarYRenderizarDashboard() {
     });
   }
 
+  // Renderizar Ingresos por Categoría divididos por Jhonathan y Sindy
   const panelIngCat = document.getElementById('panelIngresosCat');
   if(panelIngCat) {
     panelIngCat.innerHTML = '';
-    const arrIng = Object.keys(ingresosPorCat).map(c => ({ cat: c, monto: ingresosPorCat[c] })).sort((a,b) => b.monto - a.monto);
-    const maxI = arrIng[0]?.monto || 1;
-    arrIng.forEach(i => {
-      panelIngCat.innerHTML += `<div><div class="flex justify-between text-xs mb-1"><span class="font-semibold text-slate-700">${esc(i.cat)}</span><span class="text-slate-500">${S(i.monto)}</span></div><div class="w-full bg-slate-100 rounded-full h-2"><div class="bg-emerald-500 h-2 rounded-full" style="width:${(i.monto/maxI)*100}%"></div></div></div>`;
+    
+    ['Jhonathan', 'Sindy'].forEach(resp => {
+      const catsUser = ingresosPorRespCat[resp] || {};
+      const arrIngUser = Object.keys(catsUser).map(c => ({ cat: c, monto: catsUser[c] })).sort((a,b) => b.monto - a.monto);
+      
+      if(arrIngUser.length > 0) {
+        panelIngCat.innerHTML += `<div class="mb-3"><p class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2"><i class="fa-solid fa-user mr-1.5 text-emerald-600"></i>${resp} (${S(ingresosPorResp[resp])})</p></div>`;
+        const maxI = arrIngUser[0]?.monto || 1;
+        arrIngUser.forEach(i => {
+          panelIngCat.innerHTML += `<div class="mb-2 pl-3 border-l-2 border-emerald-200"><div class="flex justify-between text-xs mb-1"><span class="font-semibold text-slate-700">${esc(i.cat)}</span><span class="text-slate-500">${S(i.monto)}</span></div><div class="w-full bg-slate-100 rounded-full h-1.5"><div class="bg-emerald-500 h-1.5 rounded-full" style="width:${(i.monto/maxI)*100}%"></div></div></div>`;
+        });
+      }
     });
+
+    if(Object.keys(ingresosPorRespCat['Jhonathan']).length === 0 && Object.keys(ingresosPorRespCat['Sindy']).length === 0) {
+      panelIngCat.innerHTML = '<p class="text-xs text-slate-400 text-center py-2">No hay ingresos registrados en este periodo.</p>';
+    }
   }
 
   const panelMov = document.getElementById('panelMovimientos');
