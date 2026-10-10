@@ -191,6 +191,14 @@ function mostrarVista(vista) {
   const titMovil = document.getElementById('tituloVistaMovil');
   if(titMovil) titMovil.innerText = titulos[vista];
   
+  if (vista === 'registro') {
+    const hoy = new Date();
+    const fG = document.getElementById('fechaGasto');
+    const fI = document.getElementById('fechaIngreso');
+    if (fG && (!fG.value || fG.value === '')) fG.valueAsDate = hoy;
+    if (fI && (!fI.value || fI.value === '')) fI.valueAsDate = hoy;
+  }
+  
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (vista === 'creditos') cargarModuloCreditosDetallado();
 }
@@ -297,8 +305,18 @@ window.aplicarRango = function() {
 
 document.addEventListener('DOMContentLoaded', () => {
   const hoy = new Date();
-  if(document.getElementById('fechaIngreso')) document.getElementById('fechaIngreso').valueAsDate = hoy;
-  if(document.getElementById('fechaGasto')) document.getElementById('fechaGasto').valueAsDate = hoy;
+  
+  // INYECCION DEL BOTÓN "(HOY)"
+  ['fechaGasto', 'fechaIngreso'].forEach(id => {
+    const input = document.getElementById(id);
+    if (input) {
+      input.valueAsDate = hoy;
+      const label = input.previousElementSibling;
+      if (label && label.tagName === 'LABEL' && !label.querySelector('.btn-hoy')) {
+        label.innerHTML += ` <button type="button" onclick="document.getElementById('${id}').valueAsDate = new Date()" class="btn-hoy text-sky-500 hover:text-sky-600 font-bold ml-1 text-[10px] lowercase tracking-normal">(hoy)</button>`;
+      }
+    }
+  });
 
   const chipContainer = document.querySelector('[data-preset="dia"]')?.parentElement;
   if (chipContainer && !document.querySelector('[data-preset="rango"]')) {
@@ -484,8 +502,13 @@ function procesarYRenderizarDashboard() {
     if (fStr >= fDesdeStr && fStr <= fHastaStr) {
       gastosPeriodo += m;
       gastosPorCat[g.categoria] = (gastosPorCat[g.categoria] || 0) + m;
+      
       const grp = grupoDeCat[g.categoria] || 'General';
-      gastosPorGrupo[grp] = (gastosPorGrupo[grp] || 0) + m;
+      
+      // NUEVA ESTRUCTURA PARA GASTOS POR GRUPO CON DESPLEGABLES
+      if (!gastosPorGrupo[grp]) gastosPorGrupo[grp] = { total: 0, subcats: {} };
+      gastosPorGrupo[grp].total += m;
+      gastosPorGrupo[grp].subcats[g.categoria] = (gastosPorGrupo[grp].subcats[g.categoria] || 0) + m;
     }
     movimientos.push({ id: g.id, tipo: 'Gasto', fecha: g.fecha, categoria: g.categoria, monto: m, responsable: resp, detalle: g.descripcion || '' });
   });
@@ -502,10 +525,9 @@ function procesarYRenderizarDashboard() {
     elRes.className = 'text-[10px] mt-1 font-bold ' + (resPer >= 0 ? 'text-emerald-600' : 'text-rose-600');
   }
 
-  // 3. INYECCIÓN DEL DETALLE DE INGRESOS (ENTRE SALDO Y PERIODOS)
-  // Primero limpiamos si existe uno viejo creado en el contenedor incorrecto
+  // 3. INYECCIÓN DEL DETALLE DE INGRESOS
   let oldPanel = document.getElementById('panelIngresosCat');
-  if (oldPanel && oldPanel.closest('.mt-4') && !oldPanel.closest('.min-h-\\[140px\\]')) {
+  if (oldPanel && oldPanel.closest('.mt-4') && !oldPanel.closest('.min-h-[140px]')) {
       oldPanel.parentElement.remove();
   }
 
@@ -515,14 +537,11 @@ function procesarYRenderizarDashboard() {
       if(cardIngresos && cardIngresos.parentElement) {
           const gridContainer = cardIngresos.parentElement;
           
-          // Reajustamos la grilla para que entren 4 elementos bien
           gridContainer.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4';
           
-          // Ajustamos Saldo para que no se rompa en Tablet/Móvil
           const cardSaldo = document.getElementById('saldoDisponible')?.closest('.bg-slate-900');
           if (cardSaldo) cardSaldo.className = 'bg-slate-900 rounded-3xl p-5 text-white shadow-xl shadow-slate-900/20 relative overflow-hidden flex flex-col justify-between sm:col-span-2 lg:col-span-1 min-h-[140px]';
 
-          // Creamos la nueva tarjeta de Detalle de Ingresos
           const newBox = document.createElement('div');
           newBox.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col min-h-[140px] animate-fade-in';
           newBox.innerHTML = `
@@ -530,7 +549,6 @@ function procesarYRenderizarDashboard() {
             <div id="panelIngresosCat" class="flex flex-col gap-1.5 overflow-y-auto scroll-fino pr-1 flex-1"></div>
           `;
           
-          // Insertamos exactamente antes de "Ingresos Periodo" (es decir, después de Saldo Histórico)
           gridContainer.insertBefore(newBox, cardIngresos);
           panelIngCat = document.getElementById('panelIngresosCat');
       }
@@ -596,24 +614,47 @@ function procesarYRenderizarDashboard() {
       barraPres.className = porcGlobal > 100 ? 'bg-rose-500 h-1.5 rounded-full transition-all' : (porcGlobal > 75 ? 'bg-amber-500 h-1.5 rounded-full transition-all' : 'bg-sky-500 h-1.5 rounded-full transition-all');
   }
 
-  // 5. RENDERIZAR GASTOS POR GRUPO
+  // 5. RENDERIZAR GASTOS POR GRUPO CON DESPLEGABLES DE SUBCATEGORÍA
   const panelGrp = document.getElementById('panelGrupos');
   if(panelGrp) {
     panelGrp.innerHTML = '';
-    const arrGrp = Object.keys(gastosPorGrupo).map(g => ({ grupo: g, monto: gastosPorGrupo[g] })).sort((a,b) => b.monto - a.monto);
-    const maxG = arrGrp[0]?.monto || 1;
-    if (arrGrp.length === 0 || (arrGrp.length === 1 && arrGrp[0].monto === 0)) {
+    const arrGrp = Object.keys(gastosPorGrupo).map(g => ({ grupo: g, ...gastosPorGrupo[g] })).sort((a,b) => b.total - a.total);
+    const maxG = arrGrp[0]?.total || 1;
+    
+    if (arrGrp.length === 0 || (arrGrp.length === 1 && arrGrp[0].total === 0)) {
         panelGrp.innerHTML = '<p class="text-[11px] text-slate-400">No hay gastos en este periodo.</p>';
     } else {
         arrGrp.forEach(g => {
-          if (g.monto > 0) {
-              panelGrp.innerHTML += `<div><div class="flex justify-between text-[11px] mb-1"><span class="font-bold text-slate-700">${esc(g.grupo)}</span><span class="text-slate-500 font-medium">${S(g.monto)}</span></div><div class="w-full bg-slate-100 rounded-full h-1.5"><div class="bg-slate-800 h-1.5 rounded-full transition-all" style="width:${(g.monto/maxG)*100}%"></div></div></div>`;
+          if (g.total > 0) {
+              let subHtml = '';
+              const subs = Object.keys(g.subcats).map(k => ({cat: k, monto: g.subcats[k]})).sort((a,b) => b.monto - a.monto);
+              subs.forEach(s => {
+                  if (s.monto > 0) {
+                      subHtml += `<div class="flex justify-between items-center text-[10px] text-slate-500 py-1"><span class="truncate pr-2 pl-1 border-l-2 border-slate-200 ml-1.5">${esc(s.cat)}</span><span class="font-bold">${S(s.monto)}</span></div>`;
+                  }
+              });
+
+              panelGrp.innerHTML += `
+              <details class="group rounded-xl bg-slate-50 p-2.5 mb-2 border border-slate-100 hover:border-slate-200 transition-colors">
+                  <summary class="flex flex-col cursor-pointer list-none outline-none select-none">
+                      <div class="flex justify-between items-center text-[11px] mb-1.5">
+                          <span class="font-bold text-slate-700 flex items-center gap-1.5"><i class="fa-solid fa-chevron-right text-[9px] text-slate-400 group-open:rotate-90 transition-transform"></i> ${esc(g.grupo)}</span>
+                          <span class="text-slate-600 font-bold">${S(g.total)}</span>
+                      </div>
+                      <div class="w-full bg-slate-200 rounded-full h-1.5">
+                          <div class="bg-slate-800 h-1.5 rounded-full transition-all" style="width:${(g.total/maxG)*100}%"></div>
+                      </div>
+                  </summary>
+                  <div class="mt-2 space-y-0.5">
+                      ${subHtml}
+                  </div>
+              </details>`;
           }
         });
     }
   }
 
-  // 6. RENDERIZAR MOVIMIENTOS CON BOTÓN VISIBLE DE EDITAR
+  // 6. RENDERIZAR MOVIMIENTOS
   const panelMov = document.getElementById('panelMovimientos');
   if(panelMov) {
     panelMov.innerHTML = '';
@@ -986,6 +1027,7 @@ window.enviarEdicionMovimiento = async function(e) {
   }
 }
 
+/* EDICIÓN DE CATEGORÍAS */
 function renderConfiguracion() {
   const cont = document.getElementById('contenedorGrupos');
   if(!cont) return;
@@ -1003,12 +1045,109 @@ function renderConfiguracion() {
       <p class="text-xs font-bold text-slate-800 mb-1.5">${esc(grp)}</p>
       <div class="space-y-1">`;
     grupos[grp].forEach(c => {
-      html += `<div class="flex justify-between items-center text-[11px] border-b border-slate-50 pb-1 pt-1"><span class="text-slate-700 font-bold">${esc(c.categoria)}</span><span class="text-slate-400 font-medium">Tope: ${S(c.presupuesto)}</span></div>`;
+      // AQUÍ INYECTAMOS EL BOTÓN DE LÁPIZ PARA EDITAR
+      html += `
+      <div class="flex justify-between items-center text-[11px] border-b border-slate-50 pb-1 pt-1 group">
+        <span class="text-slate-700 font-bold">${esc(c.categoria)}</span>
+        <div class="flex items-center gap-2">
+            <span class="text-slate-400 font-medium">Tope: ${S(c.presupuesto)}</span>
+            <button onclick="window.abrirModalEdicionCategoria(${c.id})" class="text-sky-500 hover:text-sky-600 transition-colors p-1" title="Editar Categoría">
+                <i class="fa-solid fa-pen"></i>
+            </button>
+        </div>
+      </div>`;
     });
     html += `</div></div>`;
   }
   html += '</div>';
   cont.innerHTML = html;
+}
+
+window.abrirModalEdicionCategoria = function(id) {
+    const cat = cacheDatos.configuracion.find(c => c.id === id);
+    if (!cat) return;
+    
+    let modal = document.getElementById('modalEditCat');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modalEditCat';
+        modal.className = 'fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4';
+        document.body.appendChild(modal);
+    }
+    
+    modal.innerHTML = `
+    <div class="bg-white rounded-3xl p-5 max-w-sm w-full shadow-2xl animate-fade-in border border-slate-200">
+        <h3 class="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <div class="w-8 h-8 rounded-xl bg-sky-50 text-sky-500 flex items-center justify-center"><i class="fa-solid fa-layer-group"></i></div>
+            Editar Categoría
+        </h3>
+        <input type="hidden" id="editCatId" value="${cat.id}">
+        <input type="hidden" id="editCatViejo" value="${esc(cat.categoria)}">
+        <input type="hidden" id="editCatTipo" value="${esc(cat.tipo)}">
+        
+        <div class="space-y-3">
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Nombre de Subcategoría</label>
+                <input type="text" id="editCatNombre" value="${esc(cat.categoria)}" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold text-slate-800 outline-none focus:border-sky-500">
+            </div>
+            
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Grupo Principal</label>
+                <input type="text" id="editCatGrupo" value="${esc(cat.grupo || '')}" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold text-slate-800 outline-none focus:border-sky-500" ${cat.tipo.toLowerCase() === 'ingreso' ? 'disabled' : ''}>
+            </div>
+            
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tope / Presupuesto</label>
+                <input type="number" id="editCatTope" value="${cat.presupuesto || 0}" step="0.01" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold text-slate-800 outline-none focus:border-sky-500">
+            </div>
+        </div>
+        
+        <div class="flex gap-2 mt-5">
+            <button onclick="document.getElementById('modalEditCat').classList.add('hidden')" class="flex-1 bg-slate-100 active:scale-95 text-slate-600 font-bold py-3 rounded-xl text-xs transition-all">Cancelar</button>
+            <button onclick="window.guardarEdicionCategoria()" class="flex-1 bg-sky-500 active:scale-95 text-white font-bold py-3 rounded-xl text-xs shadow-lg shadow-sky-500/30 transition-all">Guardar Cambios</button>
+        </div>
+    </div>`;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+window.guardarEdicionCategoria = async function() {
+    const id = document.getElementById('editCatId').value;
+    const viejoNombre = document.getElementById('editCatViejo').value;
+    const tipo = document.getElementById('editCatTipo').value;
+    const nuevoNombre = document.getElementById('editCatNombre').value.trim();
+    const nuevoGrupo = document.getElementById('editCatGrupo').value.trim();
+    const nuevoTope = parseFloat(document.getElementById('editCatTope').value) || 0;
+    
+    if (!nuevoNombre) { toast('El nombre no puede estar vacío', false); return; }
+    
+    try {
+        const btn = document.querySelector('#modalEditCat button.bg-sky-500');
+        if(btn) { btn.innerText = 'Guardando...'; btn.disabled = true; }
+
+        // 1. Actualizar la base de configuracion
+        const { error: errConf } = await supabase.from('configuracion').update({
+            categoria: nuevoNombre,
+            grupo: tipo.toLowerCase() === 'gasto' ? nuevoGrupo : null,
+            presupuesto: nuevoTope
+        }).eq('id', id);
+        if (errConf) throw errConf;
+        
+        // 2. Actualizar gastos o ingresos históricos para que no queden huérfanos
+        if (nuevoNombre !== viejoNombre) {
+            const tabla = tipo.toLowerCase() === 'gasto' ? 'gastos' : 'ingresos';
+            const { error: errHis } = await supabase.from(tabla).update({ categoria: nuevoNombre }).eq('categoria', viejoNombre);
+            if (errHis) throw errHis;
+        }
+        
+        toast('Categoría y registros actualizados', true);
+        document.getElementById('modalEditCat').classList.add('hidden');
+        cargarDashboard(); // Recarga toda la interfaz para aplicar los cambios inmediatamente
+    } catch(e) {
+        toast('Error: ' + e.message, false);
+        const btn = document.querySelector('#modalEditCat button.bg-sky-500');
+        if(btn) { btn.innerText = 'Guardar Cambios'; btn.disabled = false; }
+    }
 }
 
 window.guardarCategoria = async function(e) {
