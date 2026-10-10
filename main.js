@@ -306,7 +306,6 @@ window.aplicarRango = function() {
 document.addEventListener('DOMContentLoaded', () => {
   const hoy = new Date();
   
-  // INYECCION DEL BOTÓN "(HOY)"
   ['fechaGasto', 'fechaIngreso'].forEach(id => {
     const input = document.getElementById(id);
     if (input) {
@@ -459,10 +458,35 @@ function procesarYRenderizarDashboard() {
   });
 
   let saldoHist = totalIngresos - totalGastos;
+  let saldoMiUsuario = 0;
+  if (usuarioActual && statsResp[usuarioActual]) {
+      saldoMiUsuario = statsResp[usuarioActual].in - statsResp[usuarioActual].out;
+  }
 
   if(document.getElementById('saldoDisponible')) document.getElementById('saldoDisponible').innerText = S(saldoHist);
-  if(document.getElementById('sbSaldo')) document.getElementById('sbSaldo').innerText = S(saldoHist);
-  if(document.getElementById('sbSaldoMovil')) document.getElementById('sbSaldoMovil').innerText = S(saldoHist);
+  
+  // Ajuste para el Saldo del header superior (Mostrar saldo del usuario y no el global)
+  if(document.getElementById('sbSaldo')) document.getElementById('sbSaldo').innerText = S(saldoMiUsuario);
+  
+  if(document.getElementById('sbSaldoMovil')) {
+      const elMovil = document.getElementById('sbSaldoMovil');
+      elMovil.innerText = S(saldoMiUsuario);
+      
+      // Cambiar la etiqueta superior a "MI SALDO"
+      if (elMovil.previousElementSibling) {
+          elMovil.previousElementSibling.innerText = 'MI SALDO';
+      }
+
+      // Ajuste visual para evitar que el header se vea cortado en el celular
+      const headerTop = elMovil.closest('header') || elMovil.parentElement.parentElement;
+      if (headerTop) {
+          headerTop.style.paddingTop = 'max(1rem, env(safe-area-inset-top))';
+          headerTop.style.paddingBottom = '0.75rem';
+          headerTop.style.display = 'flex';
+          headerTop.style.alignItems = 'center';
+      }
+  }
+
   if(document.getElementById('sbIngresos')) document.getElementById('sbIngresos').innerText = totalIngresos.toLocaleString('es-PE', { minimumFractionDigits: 2 });
   if(document.getElementById('sbGastos')) document.getElementById('sbGastos').innerText = totalGastos.toLocaleString('es-PE', { minimumFractionDigits: 2 });
 
@@ -505,7 +529,6 @@ function procesarYRenderizarDashboard() {
       
       const grp = grupoDeCat[g.categoria] || 'General';
       
-      // NUEVA ESTRUCTURA PARA GASTOS POR GRUPO CON DESPLEGABLES
       if (!gastosPorGrupo[grp]) gastosPorGrupo[grp] = { total: 0, subcats: {} };
       gastosPorGrupo[grp].total += m;
       gastosPorGrupo[grp].subcats[g.categoria] = (gastosPorGrupo[grp].subcats[g.categoria] || 0) + m;
