@@ -20,6 +20,13 @@ const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g,
 const iso = d => d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
 const dm = d => ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2);
 
+// Función global para establecer el día de "hoy" forzando la zona horaria local (Perú)
+window.setFechaHoy = function(id) {
+  const d = new Date();
+  const el = document.getElementById(id);
+  if (el) el.value = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+};
+
 function toast(msg, ok = true) {
   const t = document.getElementById('toast');
   if(!t) { alert(msg); return; } 
@@ -195,8 +202,8 @@ function mostrarVista(vista) {
     const hoy = new Date();
     const fG = document.getElementById('fechaGasto');
     const fI = document.getElementById('fechaIngreso');
-    if (fG && (!fG.value || fG.value === '')) fG.valueAsDate = hoy;
-    if (fI && (!fI.value || fI.value === '')) fI.valueAsDate = hoy;
+    if (fG && (!fG.value || fG.value === '')) fG.value = iso(hoy);
+    if (fI && (!fI.value || fI.value === '')) fI.value = iso(hoy);
   }
   
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -283,8 +290,9 @@ function asociarBotonesPeriodo() {
         
         if (periodo.preset === 'rango') {
             const hoy = new Date();
-            if (!document.getElementById('fDesde').value) document.getElementById('fDesde').valueAsDate = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-            if (!document.getElementById('fHasta').value) document.getElementById('fHasta').valueAsDate = hoy;
+            // Corregido valueAsDate por format ISO para evitar saltos UTC
+            if (!document.getElementById('fDesde').value) document.getElementById('fDesde').value = iso(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+            if (!document.getElementById('fHasta').value) document.getElementById('fHasta').value = iso(hoy);
             return;
         }
         cargarDashboard();
@@ -309,10 +317,10 @@ document.addEventListener('DOMContentLoaded', () => {
   ['fechaGasto', 'fechaIngreso'].forEach(id => {
     const input = document.getElementById(id);
     if (input) {
-      input.valueAsDate = hoy;
+      input.value = iso(hoy); // Corregido valueAsDate
       const label = input.previousElementSibling;
       if (label && label.tagName === 'LABEL' && !label.querySelector('.btn-hoy')) {
-        label.innerHTML += ` <button type="button" onclick="document.getElementById('${id}').valueAsDate = new Date()" class="btn-hoy text-sky-500 hover:text-sky-600 font-bold ml-1 text-[10px] lowercase tracking-normal">(hoy)</button>`;
+        label.innerHTML += ` <button type="button" onclick="window.setFechaHoy('${id}')" class="btn-hoy text-sky-500 hover:text-sky-600 font-bold ml-1 text-[10px] lowercase tracking-normal">(hoy)</button>`;
       }
     }
   });
