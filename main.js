@@ -832,8 +832,42 @@ window.cargarModuloCreditosDetallado = async function() {
       { titulo: 'BBVA Tarjeta', clave: 'bbva_tarjeta', nombreCat: 'bbva tarjeta' }
   ];
 
+  // 1. Calcular totales globales de toda la deuda
+  let globalCapPen = 0, globalIntPen = 0, globalSegPen = 0, globalTotalPen = 0;
+
+  configCreditos.forEach(cred => {
+      let cuotas = [...((cacheDatos[cred.clave] || {}).data || [])];
+      cuotas.forEach(c => {
+          const pag = (c.pagado || c.estado || '').toString().toLowerCase().trim();
+          const esPagado = pag === 'pagado' || pag === 'si' || pag === 'sí' || pag === 'true' || pag === '1' || c.pagado === true || pag === 'fondo';
+          if (!esPagado) {
+              globalCapPen += Number(c.capital || c.amortizacion || 0);
+              globalIntPen += Number(c.interes || 0);
+              globalSegPen += Number(c.seguro_desgravamen || c.seguro || 0);
+              globalTotalPen += Number(c.monto || c.cuota || 0);
+          }
+      });
+  });
+
   let html = `<div class="space-y-4">`;
 
+  // 2. Renderizar Tarjeta Global de Deuda Total
+  if (globalTotalPen > 0) {
+      html += `
+      <div class="bg-slate-900 rounded-3xl p-5 text-white shadow-xl shadow-slate-900/20 relative overflow-hidden animate-fade-in">
+          <div class="relative z-10">
+              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Deuda Total Pendiente</p>
+              <h2 class="text-3xl font-black text-white mb-4">${S(globalTotalPen)}</h2>
+              <div class="grid grid-cols-3 gap-2 text-[10px] bg-slate-800/80 p-3 rounded-2xl border border-slate-700/50">
+                  <div><span class="block text-slate-400 mb-0.5">Capital</span><span class="font-bold text-slate-100">${S(globalCapPen)}</span></div>
+                  <div><span class="block text-slate-400 mb-0.5">Interés</span><span class="font-bold text-slate-100">${S(globalIntPen)}</span></div>
+                  <div><span class="block text-slate-400 mb-0.5">Seguros</span><span class="font-bold text-slate-100">${S(globalSegPen)}</span></div>
+              </div>
+          </div>
+      </div>`;
+  }
+
+  // 3. Renderizar Tarjetas Individuales por Crédito
   configCreditos.forEach(cred => {
       let cuotas = [...((cacheDatos[cred.clave] || {}).data || [])];
       cuotas.sort((a, b) => (a.proximo_vencimiento||a.fecha||'9999').localeCompare(b.proximo_vencimiento||b.fecha||'9999'));
@@ -887,23 +921,34 @@ window.cargarModuloCreditosDetallado = async function() {
               <span>Cronograma (${totalCuotas})</span>
               <i class="fa-solid fa-chevron-down text-[10px] group-open:rotate-180 transition-transform"></i>
             </summary>
-            <div class="mt-2 space-y-1.5 max-h-48 overflow-y-auto pr-1">`;
+            <div class="mt-2 space-y-1.5 max-h-64 overflow-y-auto pr-1">`;
 
       cuotas.forEach((c, idx) => {
           const pag = (c.pagado || c.estado || '').toString().toLowerCase().trim();
           const esPagado = pag === 'pagado' || pag === 'si' || pag === 'sí' || pag === 'true' || pag === '1' || c.pagado === true || pag === 'fondo';
           const montoCuota = Number(c.monto || c.cuota || 0);
           const fechaCuota = c.proximo_vencimiento || c.vencimiento || c.fecha || '';
+          
+          const cap = Number(c.capital || c.amortizacion || 0);
+          const inte = Number(c.interes || 0);
+          const segu = Number(c.seguro_desgravamen || c.seguro || 0);
 
           html += `
-            <div class="bg-white p-2 rounded-xl border border-slate-200/60 flex justify-between items-center text-[11px]">
-              <div>
-                <span class="font-bold text-slate-800">#${idx + 1}</span>
-                <span class="text-slate-400 text-[10px] ml-1.5">${fechaCuota.substring(0, 10)}</span>
+            <div class="bg-white p-2.5 rounded-xl border border-slate-200/60 text-[11px] mb-1.5 last:mb-0">
+              <div class="flex justify-between items-center mb-2">
+                <div>
+                  <span class="font-bold text-slate-800">#${idx + 1}</span>
+                  <span class="text-slate-400 text-[10px] ml-1.5">${fechaCuota.substring(0, 10)}</span>
+                </div>
+                <div class="text-right flex items-center gap-1.5">
+                  <span class="font-bold text-slate-800">${S(montoCuota)}</span>
+                  <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-md ${esPagado ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}">${esPagado ? 'Pagado' : 'Pendiente'}</span>
+                </div>
               </div>
-              <div class="text-right">
-                <span class="font-bold block">${S(montoCuota)}</span>
-                <span class="text-[9px] font-bold ${esPagado ? 'text-emerald-600' : 'text-amber-600'}">${esPagado ? 'Pagado' : 'Pendiente'}</span>
+              <div class="flex justify-between text-[9px] text-slate-500 bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-100">
+                  <span>Cap: <b class="text-slate-700">${S(cap)}</b></span>
+                  <span>Int: <b class="text-slate-700">${S(inte)}</b></span>
+                  <span>Seg: <b class="text-slate-700">${S(segu)}</b></span>
               </div>
             </div>`;
       });
