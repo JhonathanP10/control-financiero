@@ -24,7 +24,7 @@ const dm = d => ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1))
 window.setFechaHoy = function(id) {
   const d = new Date();
   const el = document.getElementById(id);
-  if (el) el.value = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  if (el) el.value = iso(d);
 };
 
 function toast(msg, ok = true) {
@@ -40,7 +40,8 @@ function toast(msg, ok = true) {
 function normalizar(obj) {
   const nuevo = {};
   for (let key in obj) {
-    const cleanKey = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    if (!key) continue;
+    const cleanKey = String(key).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     nuevo[cleanKey] = obj[key];
   }
   nuevo.id = obj.id || obj.ID || obj.Id;
@@ -56,6 +57,13 @@ async function fetchSafe(...nombresPosibles) {
     } catch (e) {}
   }
   return { tabla: '', data: [] };
+}
+
+/* REGISTRO DE SERVICE WORKER PARA PWA */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW notice:', err));
+  });
 }
 
 /* SISTEMA DE AUTH PROFESIONAL Y SEGURO */
@@ -184,7 +192,7 @@ window.ejecutarLogin = async function(e) {
   }
 }
 
-/* SUPABASE REALTIME: SINCRONIZACIÓN AUTOMÁTICA EN VIVO */
+/* SUPABASE REALTIME */
 function inicializarRealtime() {
   if (window._realtimeIniciado) return;
   window._realtimeIniciado = true;
@@ -196,7 +204,6 @@ function inicializarRealtime() {
     .subscribe();
 }
 
-/* MODAL MODERNO PARA RECUPERAR CONTRASEÑA */
 window.recuperarContrasena = function() {
   const emailInput = document.getElementById('loginEmail');
   const emailSugerido = emailInput ? emailInput.value.trim() : '';
@@ -215,7 +222,7 @@ window.recuperarContrasena = function() {
         <i class="fa-solid fa-key"></i>
       </div>
       <h2 class="text-lg font-bold text-white mb-1">Recuperar Contraseña</h2>
-      <p class="text-xs text-slate-400 mb-5">Ingresa tu correo electrónico registrado para enviarte las instrucciones.</p>
+      <p class="text-xs text-slate-400 mb-5">Ingresa tu correo electrónico registrado.</p>
       
       <form onsubmit="window.enviarRecuperacion(event)" class="space-y-3.5 text-left">
         <div>
@@ -242,10 +249,7 @@ window.enviarRecuperacion = async function(e) {
   btn.disabled = true;
 
   try {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin,
-    });
-    
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
     if (error) throw error;
     toast("¡Te hemos enviado un correo con las instrucciones!", true);
     document.getElementById('modalRecuperacion').remove();
@@ -262,7 +266,6 @@ window.cerrarSesion = async function() {
   verificarAutenticacion();
 }
 
-/* CAMBIO DE CONTRASEÑA DESDE LA WEB */
 window.cambiarClaveWeb = async function(e) {
   if(e) e.preventDefault();
   const nuevaClave = document.getElementById('nuevaClaveWeb').value;
@@ -278,7 +281,6 @@ window.cambiarClaveWeb = async function(e) {
   try {
     const { error } = await supabase.auth.updateUser({ password: nuevaClave });
     if (error) throw error;
-    
     toast('¡Contraseña actualizada con éxito!', true);
     document.getElementById('nuevaClaveWeb').value = '';
     btn.innerText = 'Actualizar Contraseña';
@@ -290,7 +292,6 @@ window.cambiarClaveWeb = async function(e) {
   }
 }
 
-/* NAVEGACIÓN Y VISTAS */
 function mostrarVista(vista) {
   const mapa = { dash: 'viewDash', registro: 'viewRegistro', creditos: 'viewDeudas', config: 'viewConfig' };
   Object.keys(mapa).forEach(v => {
@@ -344,7 +345,6 @@ window.cambiarTab = function(tipo) {
   }
 };
 
-/* PERIODO DE TIEMPO Y FILTROS */
 function calcularRango() {
   const hoy = new Date(), o = periodo.offset;
   let desde, hasta, etiqueta;
@@ -376,10 +376,8 @@ function calcularRango() {
 
 function pintarChips() {
   document.querySelectorAll('[data-preset]').forEach(b => b.classList.toggle('activo', b.dataset.preset === periodo.preset));
-  
   const rp = document.getElementById('rangoPersonalizado');
   if(rp) rp.classList.toggle('hidden', periodo.preset !== 'rango');
-  
   const fijo = periodo.preset === 'rango' || periodo.preset === 'todo';
   ['btnAnterior', 'btnSiguiente'].forEach(id => {
     const el = document.getElementById(id);
@@ -394,7 +392,6 @@ function asociarBotonesPeriodo() {
         periodo.preset = b.dataset.preset; 
         periodo.offset = 0; 
         pintarChips(); 
-        
         if (periodo.preset === 'rango') {
             const hoy = new Date();
             if (!document.getElementById('fDesde').value) document.getElementById('fDesde').value = iso(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
@@ -419,7 +416,6 @@ window.aplicarRango = function() {
 
 document.addEventListener('DOMContentLoaded', () => {
   const hoy = new Date();
-  
   ['fechaGasto', 'fechaIngreso'].forEach(id => {
     const input = document.getElementById(id);
     if (input) {
@@ -458,12 +454,14 @@ document.addEventListener('DOMContentLoaded', () => {
   verificarAutenticacion();
 });
 
-/* CARGA BLINDADA Y ROBUSTA CONTRA ERRORES DE RED O TABLAS */
+/* CARGA BLINDADA Y ROBUSTA CONTRA CUALQUIER EXCEPCIÓN */
 window.cargarDashboard = async function(silencioso = false) {
   try {
-    const resG = await supabase.from('gastos').select('*').limit(50000).order('id', { ascending: false }).catch(e => ({ error: e, data: [] }));
-    const resI = await supabase.from('ingresos').select('*').limit(50000).order('id', { ascending: false }).catch(e => ({ error: e, data: [] }));
-    const resC = await supabase.from('configuracion').select('*').limit(5000).catch(e => ({ error: e, data: [] }));
+    const [resG, resI, resC] = await Promise.all([
+      supabase.from('gastos').select('*').limit(50000).order('id', { ascending: false }).catch(e => ({ error: e, data: [] })),
+      supabase.from('ingresos').select('*').limit(50000).order('id', { ascending: false }).catch(e => ({ error: e, data: [] })),
+      supabase.from('configuracion').select('*').limit(5000).catch(e => ({ error: e, data: [] }))
+    ]);
 
     cacheDatos.gastos = (!resG.error && resG.data) ? resG.data.map(normalizar) : [];
     cacheDatos.ingresos = (!resI.error && resI.data) ? resI.data.map(normalizar) : [];
@@ -475,6 +473,7 @@ window.cargarDashboard = async function(silencioso = false) {
 
     procesarYRenderizarDashboard();
   } catch (err) {
+    console.error('Error en carga:', err);
     if(!silencioso) toast('Error al sincronizar datos. Revisa la consola (F12).', false);
   }
 }
@@ -515,7 +514,6 @@ function renderHeaderUsuario() {
     </button>`;
 }
 
-/* GARANTIZA CONTENEDORES Y AÑADE BARRA DE BÚSQUEDA Y EXPORTACIÓN CSV */
 function garantizarContenedoresDashboard() {
   const dashView = document.getElementById('viewDash');
   if (!dashView) return;
@@ -571,7 +569,7 @@ function garantizarContenedoresDashboard() {
 }
 
 window.filtrarMovimientosBusqueda = function(valor) {
-  filtroBusquedaMovimientos = valor.toLowerCase().trim();
+  filtroBusquedaMovimientos = String(valor || '').toLowerCase().trim();
   procesarYRenderizarDashboard();
 }
 
@@ -583,11 +581,11 @@ window.exportarCSV = function() {
   let lineas = ["ID,Tipo,Fecha,Categoria,Monto,Responsable,Detalle"];
 
   [...cacheDatos.gastos, ...cacheDatos.ingresos].forEach(m => {
-    const fStr = (m.fecha || '').substring(0, 10);
+    const fStr = m.fecha ? String(m.fecha).substring(0, 10) : '';
     if (fStr >= fDesdeStr && fStr <= fHastaStr) {
       const tipo = m.descripcion !== undefined ? 'Gasto' : 'Ingreso';
-      const detalle = (m.descripcion || m.comentario || '').replace(/,/g, ' ');
-      lineas.push(`${m.id},${tipo},${fStr},"${m.categoria}",${m.monto},${m.responsable || 'Jhonathan'},"${detalle}"`);
+      const detalle = String(m.descripcion || m.comentario || '').replace(/,/g, ' ');
+      lineas.push(`${m.id},${tipo},${fStr},"${esc(m.categoria)}",${m.monto},${esc(m.responsable || 'Jhonathan')},"${detalle}"`);
     }
   });
 
@@ -600,302 +598,297 @@ window.exportarCSV = function() {
   toast('Reporte CSV exportado con éxito', true);
 }
 
-/* LÓGICA PRINCIPAL DEL DASHBOARD Y FILTROS */
 function procesarYRenderizarDashboard() {
-  const filtro = calcularRango();
-  const etiq = document.getElementById('etiquetaPeriodo');
-  if(etiq) etiq.innerText = filtro.etiqueta;
+  try {
+    const filtro = calcularRango();
+    const etiq = document.getElementById('etiquetaPeriodo');
+    if(etiq) etiq.innerText = filtro.etiqueta;
 
-  renderHeaderUsuario();
-  ocultarModulosSinUso();
-  garantizarContenedoresDashboard();
+    renderHeaderUsuario();
+    ocultarModulosSinUso();
+    garantizarContenedoresDashboard();
 
-  const selGasto = document.getElementById('categoriaGasto');
-  const selIng = document.getElementById('categoriaIngreso');
-  if(selGasto) selGasto.innerHTML = '';
-  if(selIng) selIng.innerHTML = '';
+    const selGasto = document.getElementById('categoriaGasto');
+    const selIng = document.getElementById('categoriaIngreso');
+    if(selGasto) selGasto.innerHTML = '';
+    if(selIng) selIng.innerHTML = '';
 
-  const gruposG = {};
-  const grupoDeCat = {};
-  cacheDatos.configuracion.forEach(c => {
-    if (c.tipo === 'Gasto' || c.tipo === 'gasto') {
-      const grp = c.grupo || 'General';
-      (gruposG[grp] = gruposG[grp] || []).push(c.categoria);
-      grupoDeCat[c.categoria] = grp;
-    }
-  });
-
-  for (const grp in gruposG) {
-    const og = document.createElement('optgroup'); og.label = grp;
-    gruposG[grp].forEach(cat => {
-      const o = document.createElement('option'); o.value = cat; o.textContent = cat; og.appendChild(o);
-    });
-    if(selGasto) selGasto.appendChild(og);
-  }
-
-  cacheDatos.configuracion.filter(c => c.tipo === 'Ingreso' || c.tipo === 'ingreso').forEach(c => {
-    const o = document.createElement('option'); o.value = c.categoria; o.textContent = c.categoria;
-    if(selIng) selIng.appendChild(o);
-  });
-
-  // 1. CALCULOS GLOBALES HISTÓRICOS
-  let totalIngresos = 0, totalGastos = 0;
-  const statsResp = { 'Jhonathan': { in: 0, out: 0 }, 'Sindy': { in: 0, out: 0 } };
-
-  cacheDatos.ingresos.forEach(i => {
-    const m = Number(i.monto) || 0;
-    totalIngresos += m;
-    const resp = i.responsable || 'Jhonathan';
-    if(statsResp[resp]) statsResp[resp].in += m;
-  });
-
-  cacheDatos.gastos.forEach(g => {
-    const m = Number(g.monto) || 0;
-    totalGastos += m;
-    const resp = g.responsable || 'Jhonathan';
-    if(statsResp[resp]) statsResp[resp].out += m;
-  });
-
-  let saldoHist = totalIngresos - totalGastos;
-  let saldoMiUsuario = 0;
-  if (usuarioActual && statsResp[usuarioActual]) {
-      saldoMiUsuario = statsResp[usuarioActual].in - statsResp[usuarioActual].out;
-  }
-
-  if(document.getElementById('saldoDisponible')) document.getElementById('saldoDisponible').innerText = S(saldoHist);
-  if(document.getElementById('sbSaldo')) document.getElementById('sbSaldo').innerText = S(saldoMiUsuario);
-  
-  if(document.getElementById('sbSaldoMovil')) {
-      const elMovil = document.getElementById('sbSaldoMovil');
-      elMovil.innerText = S(saldoMiUsuario);
-      if (elMovil.previousElementSibling) elMovil.previousElementSibling.innerText = 'MI SALDO';
-  }
-
-  if(document.getElementById('sbIngresos')) document.getElementById('sbIngresos').innerText = totalIngresos.toLocaleString('es-PE', { minimumFractionDigits: 2 });
-  if(document.getElementById('sbGastos')) document.getElementById('sbGastos').innerText = totalGastos.toLocaleString('es-PE', { minimumFractionDigits: 2 });
-
-  if(document.getElementById('jhoSaldo')) document.getElementById('jhoSaldo').innerText = S(statsResp['Jhonathan'].in - statsResp['Jhonathan'].out);
-  if(document.getElementById('sinSaldo')) document.getElementById('sinSaldo').innerText = S(statsResp['Sindy'].in - statsResp['Sindy'].out);
-
-  // 2. CÁLCULOS DEL PERIODO FILTRADO
-  const fDesdeStr = filtro.desde;
-  const fHastaStr = filtro.hasta;
-
-  let ingresosPeriodo = 0, gastosPeriodo = 0;
-  let gastosPorCat = {}, gastosPorGrupo = {};
-  let ingresosPorRespCat = { 'Jhonathan': {}, 'Sindy': {} };
-  let ingresosPorResp = { 'Jhonathan': 0, 'Sindy': 0 };
-  let movimientos = [];
-
-  cacheDatos.ingresos.forEach(i => {
-    const fStr = i.fecha ? i.fecha.substring(0, 10) : '';
-    const m = Number(i.monto) || 0;
-    const resp = i.responsable || 'Jhonathan';
-    const cat = i.categoria || 'Otros';
-    
-    if (fStr >= fDesdeStr && fStr <= fHastaStr) {
-      ingresosPeriodo += m;
-      if(ingresosPorResp[resp] !== undefined) ingresosPorResp[resp] += m;
-      const targetUser = ingresosPorRespCat[resp] ? resp : 'Jhonathan';
-      ingresosPorRespCat[targetUser][cat] = (ingresosPorRespCat[targetUser][cat] || 0) + m;
-    }
-    movimientos.push({ id: i.id, tipo: 'Ingreso', fecha: i.fecha, categoria: i.categoria, monto: m, responsable: resp, detalle: i.comentario || i.descripcion || '' });
-  });
-
-  cacheDatos.gastos.forEach(g => {
-    const fStr = g.fecha ? g.fecha.substring(0, 10) : '';
-    const m = Number(g.monto) || 0;
-    const resp = g.responsable || 'Jhonathan';
-    
-    if (fStr >= fDesdeStr && fStr <= fHastaStr) {
-      gastosPeriodo += m;
-      gastosPorCat[g.categoria] = (gastosPorCat[g.categoria] || 0) + m;
-      
-      const grp = grupoDeCat[g.categoria] || 'General';
-      
-      if (!gastosPorGrupo[grp]) gastosPorGrupo[grp] = { total: 0, subcats: {} };
-      gastosPorGrupo[grp].total += m;
-      gastosPorGrupo[grp].subcats[g.categoria] = (gastosPorGrupo[grp].subcats[g.categoria] || 0) + m;
-    }
-    movimientos.push({ id: g.id, tipo: 'Gasto', fecha: g.fecha, categoria: g.categoria, monto: m, responsable: resp, detalle: g.descripcion || '' });
-  });
-
-  if(document.getElementById('periodoIngresos')) document.getElementById('periodoIngresos').innerText = S(ingresosPeriodo);
-  if(document.getElementById('periodoGastos')) document.getElementById('periodoGastos').innerText = S(gastosPeriodo);
-  if(document.getElementById('periodoJhoIn')) document.getElementById('periodoJhoIn').innerText = 'Jho: ' + S(ingresosPorResp['Jhonathan'] || 0);
-  if(document.getElementById('periodoSinIn')) document.getElementById('periodoSinIn').innerText = 'Sin: ' + S(ingresosPorResp['Sindy'] || 0);
-
-  const resPer = ingresosPeriodo - gastosPeriodo;
-  const elRes = document.getElementById('periodoResultado');
-  if(elRes) {
-    elRes.innerText = (resPer >= 0 ? 'Te quedan ' : 'Vas sobre-gastado ') + S(Math.abs(resPer));
-    elRes.className = 'text-[10px] mt-1 font-bold ' + (resPer >= 0 ? 'text-emerald-600' : 'text-rose-600');
-  }
-
-  // 3. INYECCIÓN DEL DETALLE DE INGRESOS
-  let panelIngCat = document.getElementById('panelIngresosCat');
-  if (!panelIngCat) {
-      const cardIngresos = document.getElementById('periodoIngresos')?.closest('.bg-white');
-      if(cardIngresos && cardIngresos.parentElement) {
-          const gridContainer = cardIngresos.parentElement;
-          gridContainer.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4';
-          
-          const newBox = document.createElement('div');
-          newBox.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col min-h-[140px] animate-fade-in';
-          newBox.innerHTML = `
-            <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Ingresos por Categoría</p>
-            <div id="panelIngresosCat" class="flex flex-col gap-1.5 overflow-y-auto scroll-fino pr-1 flex-1"></div>
-          `;
-          gridContainer.insertBefore(newBox, cardIngresos);
-          panelIngCat = document.getElementById('panelIngresosCat');
+    const gruposG = {};
+    const grupoDeCat = {};
+    cacheDatos.configuracion.forEach(c => {
+      const tipo = String(c.tipo || '').toLowerCase();
+      if (tipo === 'gasto') {
+        const grp = c.grupo || 'General';
+        (gruposG[grp] = gruposG[grp] || []).push(c.categoria);
+        grupoDeCat[c.categoria] = grp;
       }
-  }
+    });
 
-  if (panelIngCat) {
-      panelIngCat.innerHTML = '';
-      ['Jhonathan', 'Sindy'].forEach(resp => {
-          const catsUser = ingresosPorRespCat[resp] || {};
-          const arrIngUser = Object.keys(catsUser).map(c => ({ cat: c, monto: catsUser[c] })).sort((a,b) => b.monto - a.monto);
-
-          if(arrIngUser.length > 0) {
-              panelIngCat.innerHTML += `<div class="mb-1 mt-1"><p class="text-[9px] font-bold text-slate-500 uppercase tracking-wider"><i class="fa-solid fa-user mr-1 text-emerald-500"></i>${resp} (${S(ingresosPorResp[resp])})</p></div>`;
-              const maxI = arrIngUser[0]?.monto || 1;
-              arrIngUser.forEach(i => {
-                  panelIngCat.innerHTML += `
-                  <div class="mb-1.5 pl-2 border-l-2 border-emerald-200">
-                    <div class="flex justify-between items-center text-[10px] mb-0.5">
-                      <span class="font-bold text-slate-700 truncate pr-1">${esc(i.cat)}</span>
-                      <span class="text-slate-500 font-medium">${S(i.monto)}</span>
-                    </div>
-                    <div class="w-full bg-slate-50 rounded-full h-1">
-                      <div class="bg-emerald-400 h-1 rounded-full transition-all" style="width:${(i.monto/maxI)*100}%"></div>
-                    </div>
-                  </div>`;
-              });
-          }
+    for (const grp in gruposG) {
+      const og = document.createElement('optgroup'); og.label = grp;
+      gruposG[grp].forEach(cat => {
+        const o = document.createElement('option'); o.value = cat; o.textContent = cat; og.appendChild(o);
       });
-      if(panelIngCat.innerHTML === '') panelIngCat.innerHTML = '<p class="text-[10px] text-slate-400 py-2">No hay ingresos registrados en este rango.</p>';
-  }
+      if(selGasto) selGasto.appendChild(og);
+    }
 
-  // 4. RENDERIZAR PRESUPUESTOS Y BARRAS
-  let totalTopeGlobal = 0, totalGastadoGlobal = 0;
-  const panelPres = document.getElementById('panelPresupuestos');
-  if(panelPres) {
-    panelPres.innerHTML = '';
-    cacheDatos.configuracion.filter(c => (c.tipo === 'Gasto' || c.tipo === 'gasto') && Number(c.presupuesto) > 0).forEach(c => {
-      const tope = Number(c.presupuesto);
-      const gastado = gastosPorCat[c.categoria] || 0;
-      totalTopeGlobal += tope; 
-      totalGastadoGlobal += gastado;
-      const porc = tope > 0 ? (gastado / tope) * 100 : 0;
-      const color = porc > 100 ? 'bg-rose-500' : (porc > 75 ? 'bg-amber-500' : 'bg-sky-500');
-      
-      panelPres.innerHTML += `<div>
-        <div class="flex justify-between items-end mb-1">
-          <span class="text-[11px] font-bold text-slate-700">${esc(c.categoria)}</span>
-          <span class="text-[10px] text-slate-500 font-medium">${S(gastado)} / ${S(tope)}</span>
-        </div>
-        <div class="w-full bg-slate-100 rounded-full h-1.5"><div class="${color} h-1.5 rounded-full transition-all" style="width:${Math.min(porc, 100)}%"></div></div>
-      </div>`;
+    cacheDatos.configuracion.filter(c => String(c.tipo || '').toLowerCase() === 'ingreso').forEach(c => {
+      const o = document.createElement('option'); o.value = c.categoria; o.textContent = c.categoria;
+      if(selIng) selIng.appendChild(o);
     });
-    if(panelPres.innerHTML === '') panelPres.innerHTML = '<p class="text-xs text-slate-400">No hay presupuestos definidos.</p>';
-  }
 
-  if(document.getElementById('totalPresupuestos')) {
-      document.getElementById('totalPresupuestos').innerText = totalGastadoGlobal.toLocaleString('es-PE', {minimumFractionDigits:2}) + ' / ' + totalTopeGlobal.toLocaleString('es-PE', {minimumFractionDigits:2});
-  }
-  const barraPres = document.getElementById('barraTotalPresupuestos');
-  const porcGlobal = totalTopeGlobal > 0 ? (totalGastadoGlobal / totalTopeGlobal) * 100 : 0;
-  if(barraPres) {
-      barraPres.style.width = Math.min(porcGlobal, 100) + '%';
-      barraPres.className = porcGlobal > 100 ? 'bg-rose-500 h-1.5 rounded-full transition-all' : (porcGlobal > 75 ? 'bg-amber-500 h-1.5 rounded-full transition-all' : 'bg-sky-500 h-1.5 rounded-full transition-all');
-  }
+    let totalIngresos = 0, totalGastos = 0;
+    const statsResp = { 'Jhonathan': { in: 0, out: 0 }, 'Sindy': { in: 0, out: 0 } };
 
-  // 5. RENDERIZAR GASTOS POR GRUPO CON DESPLEGABLES
-  const panelGrp = document.getElementById('panelGrupos');
-  if(panelGrp) {
-    panelGrp.innerHTML = '';
-    const arrGrp = Object.keys(gastosPorGrupo).map(g => ({ grupo: g, ...gastosPorGrupo[g] })).sort((a,b) => b.total - a.total);
-    const maxG = arrGrp[0]?.total || 1;
+    cacheDatos.ingresos.forEach(i => {
+      const m = Number(i.monto) || 0;
+      totalIngresos += m;
+      const resp = i.responsable || 'Jhonathan';
+      if(statsResp[resp]) statsResp[resp].in += m;
+    });
+
+    cacheDatos.gastos.forEach(g => {
+      const m = Number(g.monto) || 0;
+      totalGastos += m;
+      const resp = g.responsable || 'Jhonathan';
+      if(statsResp[resp]) statsResp[resp].out += m;
+    });
+
+    let saldoHist = totalIngresos - totalGastos;
+    let saldoMiUsuario = 0;
+    if (usuarioActual && statsResp[usuarioActual]) {
+        saldoMiUsuario = statsResp[usuarioActual].in - statsResp[usuarioActual].out;
+    }
+
+    if(document.getElementById('saldoDisponible')) document.getElementById('saldoDisponible').innerText = S(saldoHist);
+    if(document.getElementById('sbSaldo')) document.getElementById('sbSaldo').innerText = S(saldoMiUsuario);
     
-    if (arrGrp.length === 0 || (arrGrp.length === 1 && arrGrp[0].total === 0)) {
-        panelGrp.innerHTML = '<p class="text-[11px] text-slate-400">No hay gastos en este periodo.</p>';
-    } else {
-        arrGrp.forEach(g => {
-          if (g.total > 0) {
-              let subHtml = '';
-              const subs = Object.keys(g.subcats).map(k => ({cat: k, monto: g.subcats[k]})).sort((a,b) => b.monto - a.monto);
-              subs.forEach(s => {
-                  if (s.monto > 0) {
-                      subHtml += `<div class="flex justify-between items-center text-[10px] text-slate-500 py-1"><span class="truncate pr-2 pl-1 border-l-2 border-slate-200 ml-1.5">${esc(s.cat)}</span><span class="font-bold">${S(s.monto)}</span></div>`;
-                  }
-              });
-
-              panelGrp.innerHTML += `
-              <details class="group rounded-xl bg-slate-50 p-2.5 mb-2 border border-slate-100 hover:border-slate-200 transition-colors">
-                  <summary class="flex flex-col cursor-pointer list-none outline-none select-none">
-                      <div class="flex justify-between items-center text-[11px] mb-1.5">
-                          <span class="font-bold text-slate-700 flex items-center gap-1.5"><i class="fa-solid fa-chevron-right text-[9px] text-slate-400 group-open:rotate-90 transition-transform"></i> ${esc(g.grupo)}</span>
-                          <span class="text-slate-600 font-bold">${S(g.total)}</span>
-                      </div>
-                      <div class="w-full bg-slate-200 rounded-full h-1.5">
-                          <div class="bg-slate-800 h-1.5 rounded-full transition-all" style="width:${(g.total/maxG)*100}%"></div>
-                      </div>
-                  </summary>
-                  <div class="mt-2 space-y-0.5">
-                      ${subHtml}
-                  </div>
-              </details>`;
-          }
-        });
+    if(document.getElementById('sbSaldoMovil')) {
+        const elMovil = document.getElementById('sbSaldoMovil');
+        elMovil.innerText = S(saldoMiUsuario);
+        if (elMovil.previousElementSibling) elMovil.previousElementSibling.innerText = 'MI SALDO';
     }
-  }
 
-  // 6. RENDERIZAR MOVIMIENTOS (CON FILTRO DE BÚSQUEDA)
-  const panelMov = document.getElementById('panelMovimientos');
-  if(panelMov) {
-    panelMov.innerHTML = '';
-    movimientos.sort((a,b) => {
-      const fA = a.fecha ? a.fecha.substring(0,10) : '';
-      const fB = b.fecha ? b.fecha.substring(0,10) : '';
-      if (fA === fB) return b.id - a.id;
-      return fB > fA ? 1 : -1;
+    if(document.getElementById('sbIngresos')) document.getElementById('sbIngresos').innerText = totalIngresos.toLocaleString('es-PE', { minimumFractionDigits: 2 });
+    if(document.getElementById('sbGastos')) document.getElementById('sbGastos').innerText = totalGastos.toLocaleString('es-PE', { minimumFractionDigits: 2 });
+
+    if(document.getElementById('jhoSaldo')) document.getElementById('jhoSaldo').innerText = S(statsResp['Jhonathan'].in - statsResp['Jhonathan'].out);
+    if(document.getElementById('sinSaldo')) document.getElementById('sinSaldo').innerText = S(statsResp['Sindy'].in - statsResp['Sindy'].out);
+
+    const fDesdeStr = filtro.desde;
+    const fHastaStr = filtro.hasta;
+
+    let ingresosPeriodo = 0, gastosPeriodo = 0;
+    let gastosPorCat = {}, gastosPorGrupo = {};
+    let ingresosPorRespCat = { 'Jhonathan': {}, 'Sindy': {} };
+    let ingresosPorResp = { 'Jhonathan': 0, 'Sindy': 0 };
+    let movimientos = [];
+
+    cacheDatos.ingresos.forEach(i => {
+      const fStr = i.fecha ? String(i.fecha).substring(0, 10) : '';
+      const m = Number(i.monto) || 0;
+      const resp = i.responsable || 'Jhonathan';
+      const cat = i.categoria || 'Otros';
+      
+      if (fStr >= fDesdeStr && fStr <= fHastaStr) {
+        ingresosPeriodo += m;
+        if(ingresosPorResp[resp] !== undefined) ingresosPorResp[resp] += m;
+        const targetUser = ingresosPorRespCat[resp] ? resp : 'Jhonathan';
+        ingresosPorRespCat[targetUser][cat] = (ingresosPorRespCat[targetUser][cat] || 0) + m;
+      }
+      movimientos.push({ id: i.id, tipo: 'Ingreso', fecha: fStr, categoria: cat, monto: m, responsable: resp, detalle: i.comentario || i.descripcion || '' });
     });
 
-    const filtrados = movimientos.filter(m => {
-      if (!filtroBusquedaMovimientos) return true;
-      const texto = `${m.categoria} ${m.responsable} ${m.detalle}`.toLowerCase();
-      return texto.includes(filtroBusquedaMovimientos);
+    cacheDatos.gastos.forEach(g => {
+      const fStr = g.fecha ? String(g.fecha).substring(0, 10) : '';
+      const m = Number(g.monto) || 0;
+      const resp = g.responsable || 'Jhonathan';
+      const cat = g.categoria || 'Otros';
+      
+      if (fStr >= fDesdeStr && fStr <= fHastaStr) {
+        gastosPeriodo += m;
+        gastosPorCat[cat] = (gastosPorCat[cat] || 0) + m;
+        const grp = grupoDeCat[cat] || 'General';
+        if (!gastosPorGrupo[grp]) gastosPorGrupo[grp] = { total: 0, subcats: {} };
+        gastosPorGrupo[grp].total += m;
+        gastosPorGrupo[grp].subcats[cat] = (gastosPorGrupo[grp].subcats[cat] || 0) + m;
+      }
+      movimientos.push({ id: g.id, tipo: 'Gasto', fecha: fStr, categoria: cat, monto: m, responsable: resp, detalle: g.descripcion || '' });
     });
 
-    if (filtrados.length === 0) {
-        panelMov.innerHTML = '<p class="text-[11px] text-slate-400 py-2">No se encontraron movimientos con ese criterio.</p>';
-    } else {
-        filtrados.slice(0, 50).forEach(m => {
-          const ing = m.tipo === 'Ingreso';
-          panelMov.innerHTML += `
-            <div class="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50 rounded-lg px-2 -mx-2 transition-colors group" onclick="editarMov(${m.id}, '${m.tipo}')">
-              <div class="w-8 h-8 rounded-xl flex items-center justify-center ${ing ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'} flex-shrink-0 text-xs font-bold shadow-sm border border-${ing ? 'emerald' : 'rose'}-100">
-                <i class="fa-solid ${ing ? 'fa-arrow-down' : 'fa-arrow-up'}"></i>
-              </div>
-              <div class="flex-1 min-w-0">
-                <p class="text-[11px] font-bold text-slate-800 truncate leading-tight">${esc(m.categoria)}</p>
-                <p class="text-[9px] text-slate-400 truncate mt-0.5">${esc(m.fecha ? m.fecha.substring(0,10) : '')} · ${esc(m.responsable)} ${m.detalle ? '· '+esc(m.detalle) : ''}</p>
-              </div>
-              <div class="text-right flex flex-col justify-center items-end gap-1">
-                <span class="text-[11px] font-bold block ${ing ? 'text-emerald-600' : 'text-slate-800'}">${ing ? '+' : '−'}${S(m.monto)}</span>
-                <span class="text-[9px] font-bold text-slate-400 bg-slate-100 hover:bg-sky-50 hover:text-sky-600 hover:border-sky-200 transition-colors flex items-center gap-1 px-2 py-0.5 rounded border border-slate-200"><i class="fa-solid fa-pen"></i> Editar</span>
-              </div>
-            </div>`;
-        });
-    }
-  }
+    if(document.getElementById('periodoIngresos')) document.getElementById('periodoIngresos').innerText = S(ingresosPeriodo);
+    if(document.getElementById('periodoGastos')) document.getElementById('periodoGastos').innerText = S(gastosPeriodo);
+    if(document.getElementById('periodoJhoIn')) document.getElementById('periodoJhoIn').innerText = 'Jho: ' + S(ingresosPorResp['Jhonathan'] || 0);
+    if(document.getElementById('periodoSinIn')) document.getElementById('periodoSinIn').innerText = 'Sin: ' + S(ingresosPorResp['Sindy'] || 0);
 
-  renderConfiguracion();
-  renderFondos();
+    const resPer = ingresosPeriodo - gastosPeriodo;
+    const elRes = document.getElementById('periodoResultado');
+    if(elRes) {
+      elRes.innerText = (resPer >= 0 ? 'Te quedan ' : 'Vas sobre-gastado ') + S(Math.abs(resPer));
+      elRes.className = 'text-[10px] mt-1 font-bold ' + (resPer >= 0 ? 'text-emerald-600' : 'text-rose-600');
+    }
+
+    let panelIngCat = document.getElementById('panelIngresosCat');
+    if (!panelIngCat) {
+        const cardIngresos = document.getElementById('periodoIngresos')?.closest('.bg-white');
+        if(cardIngresos && cardIngresos.parentElement) {
+            const gridContainer = cardIngresos.parentElement;
+            gridContainer.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4';
+            const newBox = document.createElement('div');
+            newBox.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col min-h-[140px] animate-fade-in';
+            newBox.innerHTML = `
+              <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Ingresos por Categoría</p>
+              <div id="panelIngresosCat" class="flex flex-col gap-1.5 overflow-y-auto scroll-fino pr-1 flex-1"></div>
+            `;
+            gridContainer.insertBefore(newBox, cardIngresos);
+            panelIngCat = document.getElementById('panelIngresosCat');
+        }
+    }
+
+    if (panelIngCat) {
+        panelIngCat.innerHTML = '';
+        ['Jhonathan', 'Sindy'].forEach(resp => {
+            const catsUser = ingresosPorRespCat[resp] || {};
+            const arrIngUser = Object.keys(catsUser).map(c => ({ cat: c, monto: catsUser[c] })).sort((a,b) => b.monto - a.monto);
+
+            if(arrIngUser.length > 0) {
+                panelIngCat.innerHTML += `<div class="mb-1 mt-1"><p class="text-[9px] font-bold text-slate-500 uppercase tracking-wider"><i class="fa-solid fa-user mr-1 text-emerald-500"></i>${resp} (${S(ingresosPorResp[resp])})</p></div>`;
+                const maxI = arrIngUser[0]?.monto || 1;
+                arrIngUser.forEach(i => {
+                    panelIngCat.innerHTML += `
+                    <div class="mb-1.5 pl-2 border-l-2 border-emerald-200">
+                      <div class="flex justify-between items-center text-[10px] mb-0.5">
+                        <span class="font-bold text-slate-700 truncate pr-1">${esc(i.cat)}</span>
+                        <span class="text-slate-500 font-medium">${S(i.monto)}</span>
+                      </div>
+                      <div class="w-full bg-slate-50 rounded-full h-1">
+                        <div class="bg-emerald-400 h-1 rounded-full transition-all" style="width:${(i.monto/maxI)*100}%"></div>
+                      </div>
+                    </div>`;
+                });
+            }
+        });
+        if(panelIngCat.innerHTML === '') panelIngCat.innerHTML = '<p class="text-[10px] text-slate-400 py-2">No hay ingresos registrados en este rango.</p>';
+    }
+
+    let totalTopeGlobal = 0, totalGastadoGlobal = 0;
+    const panelPres = document.getElementById('panelPresupuestos');
+    if(panelPres) {
+      panelPres.innerHTML = '';
+      cacheDatos.configuracion.filter(c => String(c.tipo || '').toLowerCase() === 'gasto' && Number(c.presupuesto) > 0).forEach(c => {
+        const tope = Number(c.presupuesto);
+        const gastado = gastosPorCat[c.categoria] || 0;
+        totalTopeGlobal += tope; 
+        totalGastadoGlobal += gastado;
+        const porc = tope > 0 ? (gastado / tope) * 100 : 0;
+        const color = porc > 100 ? 'bg-rose-500' : (porc > 75 ? 'bg-amber-500' : 'bg-sky-500');
+        
+        panelPres.innerHTML += `<div>
+          <div class="flex justify-between items-end mb-1">
+            <span class="text-[11px] font-bold text-slate-700">${esc(c.categoria)}</span>
+            <span class="text-[10px] text-slate-500 font-medium">${S(gastado)} / ${S(tope)}</span>
+          </div>
+          <div class="w-full bg-slate-100 rounded-full h-1.5"><div class="${color} h-1.5 rounded-full transition-all" style="width:${Math.min(porc, 100)}%"></div></div>
+        </div>`;
+      });
+      if(panelPres.innerHTML === '') panelPres.innerHTML = '<p class="text-xs text-slate-400">No hay presupuestos definidos.</p>';
+    }
+
+    if(document.getElementById('totalPresupuestos')) {
+        document.getElementById('totalPresupuestos').innerText = totalGastadoGlobal.toLocaleString('es-PE', {minimumFractionDigits:2}) + ' / ' + totalTopeGlobal.toLocaleString('es-PE', {minimumFractionDigits:2});
+    }
+    const barraPres = document.getElementById('barraTotalPresupuestos');
+    const porcGlobal = totalTopeGlobal > 0 ? (totalGastadoGlobal / totalTopeGlobal) * 100 : 0;
+    if(barraPres) {
+        barraPres.style.width = Math.min(porcGlobal, 100) + '%';
+        barraPres.className = porcGlobal > 100 ? 'bg-rose-500 h-1.5 rounded-full transition-all' : (porcGlobal > 75 ? 'bg-amber-500 h-1.5 rounded-full transition-all' : 'bg-sky-500 h-1.5 rounded-full transition-all');
+    }
+
+    const panelGrp = document.getElementById('panelGrupos');
+    if(panelGrp) {
+      panelGrp.innerHTML = '';
+      const arrGrp = Object.keys(gastosPorGrupo).map(g => ({ grupo: g, ...gastosPorGrupo[g] })).sort((a,b) => b.total - a.total);
+      const maxG = arrGrp[0]?.total || 1;
+      
+      if (arrGrp.length === 0 || (arrGrp.length === 1 && arrGrp[0].total === 0)) {
+          panelGrp.innerHTML = '<p class="text-[11px] text-slate-400">No hay gastos en este periodo.</p>';
+      } else {
+          arrGrp.forEach(g => {
+            if (g.total > 0) {
+                let subHtml = '';
+                const subs = Object.keys(g.subcats).map(k => ({cat: k, monto: g.subcats[k]})).sort((a,b) => b.monto - a.monto);
+                subs.forEach(s => {
+                    if (s.monto > 0) {
+                        subHtml += `<div class="flex justify-between items-center text-[10px] text-slate-500 py-1"><span class="truncate pr-2 pl-1 border-l-2 border-slate-200 ml-1.5">${esc(s.cat)}</span><span class="font-bold">${S(s.monto)}</span></div>`;
+                    }
+                });
+
+                panelGrp.innerHTML += `
+                <details class="group rounded-xl bg-slate-50 p-2.5 mb-2 border border-slate-100 hover:border-slate-200 transition-colors">
+                    <summary class="flex flex-col cursor-pointer list-none outline-none select-none">
+                        <div class="flex justify-between items-center text-[11px] mb-1.5">
+                            <span class="font-bold text-slate-700 flex items-center gap-1.5"><i class="fa-solid fa-chevron-right text-[9px] text-slate-400 group-open:rotate-90 transition-transform"></i> ${esc(g.grupo)}</span>
+                            <span class="text-slate-600 font-bold">${S(g.total)}</span>
+                        </div>
+                        <div class="w-full bg-slate-200 rounded-full h-1.5">
+                            <div class="bg-slate-800 h-1.5 rounded-full transition-all" style="width:${(g.total/maxG)*100}%"></div>
+                        </div>
+                    </summary>
+                    <div class="mt-2 space-y-0.5">
+                        ${subHtml}
+                    </div>
+                </details>`;
+            }
+          });
+      }
+    }
+
+    const panelMov = document.getElementById('panelMovimientos');
+    if(panelMov) {
+      panelMov.innerHTML = '';
+      movimientos.sort((a,b) => {
+        const fA = a.fecha || '';
+        const fB = b.fecha || '';
+        if (fA === fB) return b.id - a.id;
+        return fB > fA ? 1 : -1;
+      });
+
+      const filtrados = movimientos.filter(m => {
+        if (!filtroBusquedaMovimientos) return true;
+        const texto = `${m.categoria} ${m.responsable} ${m.detalle}`.toLowerCase();
+        return texto.includes(filtroBusquedaMovimientos);
+      });
+
+      if (filtrados.length === 0) {
+          panelMov.innerHTML = '<p class="text-[11px] text-slate-400 py-2">No se encontraron movimientos con ese criterio.</p>';
+      } else {
+          filtrados.slice(0, 50).forEach(m => {
+            const ing = m.tipo === 'Ingreso';
+            panelMov.innerHTML += `
+              <div class="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50 rounded-lg px-2 -mx-2 transition-colors group" onclick="editarMov(${m.id}, '${m.tipo}')">
+                <div class="w-8 h-8 rounded-xl flex items-center justify-center ${ing ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'} flex-shrink-0 text-xs font-bold shadow-sm border border-${ing ? 'emerald' : 'rose'}-100">
+                  <i class="fa-solid ${ing ? 'fa-arrow-down' : 'fa-arrow-up'}"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-[11px] font-bold text-slate-800 truncate leading-tight">${esc(m.categoria)}</p>
+                  <p class="text-[9px] text-slate-400 truncate mt-0.5">${esc(m.fecha)} · ${esc(m.responsable)} ${m.detalle ? '· '+esc(m.detalle) : ''}</p>
+                </div>
+                <div class="text-right flex flex-col justify-center items-end gap-1">
+                  <span class="text-[11px] font-bold block ${ing ? 'text-emerald-600' : 'text-slate-800'}">${ing ? '+' : '−'}${S(m.monto)}</span>
+                  <span class="text-[9px] font-bold text-slate-400 bg-slate-100 hover:bg-sky-50 hover:text-sky-600 hover:border-sky-200 transition-colors flex items-center gap-1 px-2 py-0.5 rounded border border-slate-200"><i class="fa-solid fa-pen"></i> Editar</span>
+                </div>
+              </div>`;
+          });
+      }
+    }
+
+    renderConfiguracion();
+    renderFondos();
+  } catch (err) {
+    console.error("Error en renderizado:", err);
+  }
 }
 
-/* RENDER DE FONDOS Y CRÉDITOS CON ALERTAS INTELIGENTES */
 function renderFondos() {
   const dashView = document.getElementById('viewDash');
   if(!dashView) return;
@@ -927,7 +920,7 @@ function renderFondos() {
       
       let fondoTotal = 0;
       cacheDatos.gastos.forEach(g => {
-          const catGasto = (g.categoria || '').toLowerCase().trim();
+          const catGasto = String(g.categoria || '').toLowerCase().trim();
           const catBuscada = cred.nombreCat.toLowerCase().trim();
           if (catGasto === catBuscada) {
               fondoTotal += (Number(g.monto) || 0);
@@ -938,9 +931,8 @@ function renderFondos() {
       let cuotasPendientes = [];
       
       cuotas.forEach(c => {
-          const pag = (c.pagado || c.estado || '').toString().toLowerCase().trim();
+          const pag = String(c.pagado || c.estado || '').toLowerCase().trim();
           const montoCuota = Number(c.monto || c.cuota || 0);
-          
           if (pag === 'fondo') {
               fondoUsado += montoCuota; 
           } else if (pag !== 'pagado' && pag !== 'si' && pag !== 'sí' && pag !== 'true' && pag !== '1' && c.pagado !== true) {
@@ -971,7 +963,7 @@ function renderFondos() {
 
       const prox = cuotasPendientes[0];
       const montoProxVal = prox ? Number(prox.monto || prox.cuota || 0) : 0;
-      const rawFecha = prox ? (prox.proximo_vencimiento || prox.vencimiento || prox.fecha || '') : '';
+      const rawFecha = prox ? String(prox.proximo_vencimiento || prox.vencimiento || prox.fecha || '') : '';
       
       let badgeAlerta = '';
       if (rawFecha) {
@@ -1024,7 +1016,7 @@ window.cargarModuloCreditosDetallado = async function() {
   configCreditos.forEach(cred => {
       let cuotas = [...((cacheDatos[cred.clave] || {}).data || [])];
       cuotas.forEach(c => {
-          const pag = (c.pagado || c.estado || '').toString().toLowerCase().trim();
+          const pag = String(c.pagado || c.estado || '').toLowerCase().trim();
           const esPagado = pag === 'pagado' || pag === 'si' || pag === 'sí' || pag === 'true' || pag === '1' || c.pagado === true || pag === 'fondo';
           if (!esPagado) {
               globalCapPen += Number(c.capital || c.amortizacion || 0);
@@ -1054,14 +1046,14 @@ window.cargarModuloCreditosDetallado = async function() {
 
   configCreditos.forEach(cred => {
       let cuotas = [...((cacheDatos[cred.clave] || {}).data || [])];
-      cuotas.sort((a, b) => (a.proximo_vencimiento||a.fecha||'9999').localeCompare(b.proximo_vencimiento||b.fecha||'9999'));
+      cuotas.sort((a, b) => String(a.proximo_vencimiento||a.fecha||'9999').localeCompare(String(b.proximo_vencimiento||b.fecha||'9999')));
 
       let totalCuotas = cuotas.length, pagadasCount = 0;
       let capPag = 0, intPag = 0, segPag = 0;
       let capPen = 0, intPen = 0, segPen = 0;
 
       cuotas.forEach(c => {
-          const pag = (c.pagado || c.estado || '').toString().toLowerCase().trim();
+          const pag = String(c.pagado || c.estado || '').toLowerCase().trim();
           const esPagado = pag === 'pagado' || pag === 'si' || pag === 'sí' || pag === 'true' || pag === '1' || c.pagado === true || pag === 'fondo';
           const cap = Number(c.capital || c.amortizacion || 0);
           const inte = Number(c.interes || 0);
@@ -1108,11 +1100,10 @@ window.cargarModuloCreditosDetallado = async function() {
             <div class="mt-2 space-y-1.5 max-h-64 overflow-y-auto pr-1">`;
 
       cuotas.forEach((c, idx) => {
-          const pag = (c.pagado || c.estado || '').toString().toLowerCase().trim();
+          const pag = String(c.pagado || c.estado || '').toLowerCase().trim();
           const esPagado = pag === 'pagado' || pag === 'si' || pag === 'sí' || pag === 'true' || pag === '1' || c.pagado === true || pag === 'fondo';
           const montoCuota = Number(c.monto || c.cuota || 0);
-          const fechaCuota = c.proximo_vencimiento || c.vencimiento || c.fecha || '';
-          
+          const fechaCuota = String(c.proximo_vencimiento || c.vencimiento || c.fecha || '');
           const cap = Number(c.capital || c.amortizacion || 0);
           const inte = Number(c.interes || 0);
           const segu = Number(c.seguro_desgravamen || c.seguro || 0);
@@ -1144,7 +1135,6 @@ window.cargarModuloCreditosDetallado = async function() {
   contenedor.innerHTML = html;
 }
 
-/* REGISTRO DE GASTOS E INGRESOS */
 window.enviarGasto = async function(e) {
   if(e) e.preventDefault();
   const btn = document.getElementById('btnGuardarGasto');
@@ -1205,7 +1195,6 @@ window.enviarIngreso = async function(e) {
   }
 }
 
-/* EDICIÓN Y ELIMINACIÓN REFORZADA */
 window.eliminarMov = async function(id, tipo) {
   if (!confirm('¿Seguro que deseas eliminar este registro permanentemente?')) return;
   const tabla = tipo === 'Gasto' ? 'gastos' : 'ingresos';
@@ -1223,7 +1212,7 @@ window.editarMov = function(id, tipo) {
   if(getE('editMovId')) getE('editMovId').value = item.id;
   if(getE('editMovTipo')) getE('editMovTipo').value = tipo;
   if(getE('editMovMonto')) getE('editMovMonto').value = item.monto;
-  if(getE('editMovFecha')) getE('editMovFecha').value = item.fecha ? item.fecha.substring(0, 10) : '';
+  if(getE('editMovFecha')) getE('editMovFecha').value = item.fecha ? String(item.fecha).substring(0, 10) : '';
   if(getE('editMovResponsable')) getE('editMovResponsable').value = item.responsable || 'Jhonathan';
   if(getE('editMovDetalle')) getE('editMovDetalle').value = item.descripcion || item.comentario || '';
 
@@ -1287,7 +1276,6 @@ window.enviarEdicionMovimiento = async function(e) {
   }
 }
 
-/* EDICIÓN DE CATEGORÍAS Y MÓDULO DE CAMBIO DE CLAVE EN CONFIG */
 function renderConfiguracion() {
   const cont = document.getElementById('contenedorGrupos');
   if(!cont) return;
@@ -1296,7 +1284,7 @@ function renderConfiguracion() {
   const grupos = {};
   cacheDatos.configuracion.forEach(c => {
     const grp = c.grupo || 'General';
-    if(c.tipo === 'Gasto' || c.tipo === 'gasto') (grupos[grp] = grupos[grp] || []).push(c);
+    if(String(c.tipo || '').toLowerCase() === 'gasto') (grupos[grp] = grupos[grp] || []).push(c);
   });
 
   let html = '<h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Categorías</h3><div class="grid grid-cols-1 sm:grid-cols-2 gap-3">';
@@ -1374,7 +1362,7 @@ window.abrirModalEdicionCategoria = function(id) {
             
             <div>
                 <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Grupo Principal</label>
-                <input type="text" id="editCatGrupo" value="${esc(cat.grupo || '')}" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold text-slate-800 outline-none focus:border-sky-500" ${cat.tipo.toLowerCase() === 'ingreso' ? 'disabled' : ''}>
+                <input type="text" id="editCatGrupo" value="${esc(cat.grupo || '')}" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold text-slate-800 outline-none focus:border-sky-500" ${String(cat.tipo).toLowerCase() === 'ingreso' ? 'disabled' : ''}>
             </div>
             
             <div>
@@ -1408,13 +1396,13 @@ window.guardarEdicionCategoria = async function() {
 
         const { error: errConf } = await supabase.from('configuracion').update({
             categoria: nuevoNombre,
-            grupo: tipo.toLowerCase() === 'gasto' ? nuevoGrupo : null,
+            grupo: String(tipo).toLowerCase() === 'gasto' ? nuevoGrupo : null,
             presupuesto: nuevoTope
         }).eq('id', id);
         if (errConf) throw errConf;
         
         if (nuevoNombre !== viejoNombre) {
-            const tabla = tipo.toLowerCase() === 'gasto' ? 'gastos' : 'ingresos';
+            const tabla = String(tipo).toLowerCase() === 'gasto' ? 'gastos' : 'ingresos';
             const { error: errHis } = await supabase.from(tabla).update({ categoria: nuevoNombre }).eq('categoria', viejoNombre);
             if (errHis) throw errHis;
         }
