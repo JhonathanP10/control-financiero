@@ -5,7 +5,13 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-let usuarioActual = localStorage.getItem('usuario_app') || null;
+// Mapeo de usuarios a sus correos oficiales registrados en Supabase Auth
+const EMAILS_USUARIOS = {
+  'Jhonathan': 'perniajhonathan@gmail.com',
+  'Sindy': 'sindyrami27@gmail.com' // Cambia este correo si Sindy usó otro al registrarse
+};
+
+let usuarioActual = null;
 let periodo = { preset: 'mes', offset: 0, desde: null, hasta: null };
 let cacheDatos = { 
   gastos: [], ingresos: [], configuracion: [], 
@@ -20,7 +26,6 @@ const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g,
 const iso = d => d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
 const dm = d => ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2);
 
-// Función global para establecer el día de "hoy" forzando la zona horaria local (Perú)
 window.setFechaHoy = function(id) {
   const d = new Date();
   const el = document.getElementById(id);
@@ -65,8 +70,8 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-/* SISTEMA DE LOGIN Y PANTALLA COMPLETA */
-function verificarAutenticacion() {
+/* SISTEMA DE AUTH OFICIAL DE SUPABASE */
+async function verificarAutenticacion() {
   let layer = document.getElementById('viewLogin');
   if (!layer) {
     layer = document.createElement('div');
@@ -75,14 +80,17 @@ function verificarAutenticacion() {
     document.body.appendChild(layer);
   }
 
-  if (!usuarioActual) {
+  const { data: { session }, error } = await supabase.auth.getSession();
+
+  if (error || !session) {
+    usuarioActual = null;
     layer.innerHTML = `
       <div class="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 text-center animate-fade-in">
         <div class="w-14 h-14 bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center mx-auto mb-3 text-2xl shadow-inner">
-          <i class="fa-solid fa-wallet"></i>
+          <i class="fa-solid fa-shield-halved"></i>
         </div>
-        <h2 class="text-lg font-bold text-slate-800 mb-1">Finanzas Personales</h2>
-        <p class="text-xs text-slate-400 mb-5">Ingresa tus credenciales de acceso</p>
+        <h2 class="text-lg font-bold text-slate-800 mb-1">Acceso Seguro</h2>
+        <p class="text-xs text-slate-400 mb-5">Autenticación oficial Supabase</p>
         
         <form id="formLogin" onsubmit="window.ejecutarLogin(event)" class="space-y-3.5 text-left">
           <div>
@@ -103,6 +111,10 @@ function verificarAutenticacion() {
       </div>`;
     layer.classList.remove('hidden');
   } else {
+    // Identificar qué usuario inició sesión según su correo
+    const emailSesion = session.user.email.toLowerCase();
+    usuarioActual = Object.keys(EMAILS_USUARIOS).find(k => EMAILS_USUARIOS[k].toLowerCase() === emailSesion) || 'Jhonathan';
+    
     layer.classList.add('hidden');
     cargarDashboard();
   }
@@ -114,71 +126,35 @@ window.ejecutarLogin = async function(e) {
   const cla = document.getElementById('loginClave').value;
   const btn = document.getElementById('btnIngresarApp');
   
+  const email = EMAILS_USUARIOS[usu];
+  if (!email) {
+    toast('No hay correo configurado para este usuario', false);
+    return;
+  }
+
   btn.innerText = 'Verificando...';
   btn.disabled = true;
 
   try {
-    const { data, error } = await supabase.from('usuarios').select('*').eq('usuario', usu).single();
-    if (error || !data) throw new Error('Usuario no registrado.');
-    if (data.clave !== cla) throw new Error('Contraseña incorrecta.');
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: cla
+    });
 
-    if (cla === '1234') {
-      btn.innerText = 'Ingresar al Sistema';
-      btn.disabled = false;
-      window.mostrarModalCambioClave(usu);
-      return;
-    }
+    if (error) throw error;
 
     usuarioActual = usu;
-    localStorage.setItem('usuario_app', usu);
     toast(`¡Bienvenido, ${usu}!`, true);
     verificarAutenticacion();
   } catch (err) {
-    toast(err.message, false);
+    toast('Credenciales incorrectas o error de acceso', false);
     btn.innerText = 'Ingresar al Sistema';
     btn.disabled = false;
   }
 }
 
-window.mostrarModalCambioClave = function(usu) {
-  const layer = document.getElementById('viewLogin');
-  layer.innerHTML = `
-    <div class="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 text-center">
-      <div class="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-3 text-xl">
-        <i class="fa-solid fa-key"></i>
-      </div>
-      <h2 class="text-base font-bold text-slate-800 mb-1">Cambio Obligatorio</h2>
-      <p class="text-xs text-slate-500 mb-5">Hola <b>${usu}</b>, debes cambiar tu clave predeterminada por seguridad.</p>
-      
-      <form onsubmit="window.actualizarClaveNueva(event, '${usu}')" class="space-y-3.5 text-left">
-        <div>
-          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Nueva Contraseña</label>
-          <input type="password" id="nuevaClaveInput" required placeholder="Escribe tu nueva clave" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-amber-500">
-        </div>
-        <button type="submit" class="w-full bg-amber-600 active:scale-95 text-white font-bold py-3.5 rounded-2xl text-sm shadow-lg shadow-amber-600/20 transition-all">
-          Guardar y Entrar
-        </button>
-      </form>
-    </div>`;
-}
-
-window.actualizarClaveNueva = async function(e, usu) {
-  if(e) e.preventDefault();
-  const nueva = document.getElementById('nuevaClaveInput').value;
-  if(!nueva || nueva.length < 3) { toast('Ingresa una clave válida', false); return; }
-
-  try {
-    const { error } = await supabase.from('usuarios').update({ clave: nueva }).eq('usuario', usu);
-    if(error) throw error;
-    toast('Clave actualizada correctamente', true);
-    usuarioActual = usu;
-    localStorage.setItem('usuario_app', usu);
-    verificarAutenticacion();
-  } catch(err) { toast('Error: ' + err.message, false); }
-}
-
-window.cerrarSesion = function() {
-  localStorage.removeItem('usuario_app');
+window.cerrarSesion = async function() {
+  await supabase.auth.signOut();
   usuarioActual = null;
   verificarAutenticacion();
 }
@@ -290,7 +266,6 @@ function asociarBotonesPeriodo() {
         
         if (periodo.preset === 'rango') {
             const hoy = new Date();
-            // Corregido valueAsDate por format ISO para evitar saltos UTC
             if (!document.getElementById('fDesde').value) document.getElementById('fDesde').value = iso(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
             if (!document.getElementById('fHasta').value) document.getElementById('fHasta').value = iso(hoy);
             return;
@@ -317,7 +292,7 @@ document.addEventListener('DOMContentLoaded', () => {
   ['fechaGasto', 'fechaIngreso'].forEach(id => {
     const input = document.getElementById(id);
     if (input) {
-      input.value = iso(hoy); // Corregido valueAsDate
+      input.value = iso(hoy);
       const label = input.previousElementSibling;
       if (label && label.tagName === 'LABEL' && !label.querySelector('.btn-hoy')) {
         label.innerHTML += ` <button type="button" onclick="window.setFechaHoy('${id}')" class="btn-hoy text-sky-500 hover:text-sky-600 font-bold ml-1 text-[10px] lowercase tracking-normal">(hoy)</button>`;
@@ -402,7 +377,7 @@ function renderHeaderUsuario() {
       </div>
       <div>
         <h3 class="text-sm font-bold text-slate-800">Hola, ${usuarioActual}</h3>
-        <p class="text-[10px] text-slate-400">Sesión activa</p>
+        <p class="text-[10px] text-slate-400">Sesión segura (Supabase Auth)</p>
       </div>
     </div>
     <button onclick="window.cerrarSesion()" class="bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-600 font-bold px-3.5 py-2 rounded-xl text-xs transition-all flex items-center gap-1.5 border border-rose-100">
@@ -473,19 +448,16 @@ function procesarYRenderizarDashboard() {
 
   if(document.getElementById('saldoDisponible')) document.getElementById('saldoDisponible').innerText = S(saldoHist);
   
-  // Ajuste para el Saldo del header superior (Mostrar saldo del usuario y no el global)
   if(document.getElementById('sbSaldo')) document.getElementById('sbSaldo').innerText = S(saldoMiUsuario);
   
   if(document.getElementById('sbSaldoMovil')) {
       const elMovil = document.getElementById('sbSaldoMovil');
       elMovil.innerText = S(saldoMiUsuario);
       
-      // Cambiar la etiqueta superior a "MI SALDO"
       if (elMovil.previousElementSibling) {
           elMovil.previousElementSibling.innerText = 'MI SALDO';
       }
 
-      // Ajuste visual para evitar que el header se vea cortado en el celular
       const headerTop = elMovil.closest('header') || elMovil.parentElement.parentElement;
       if (headerTop) {
           headerTop.style.paddingTop = 'max(1rem, env(safe-area-inset-top))';
@@ -832,7 +804,6 @@ window.cargarModuloCreditosDetallado = async function() {
       { titulo: 'BBVA Tarjeta', clave: 'bbva_tarjeta', nombreCat: 'bbva tarjeta' }
   ];
 
-  // 1. Calcular totales globales de toda la deuda
   let globalCapPen = 0, globalIntPen = 0, globalSegPen = 0, globalTotalPen = 0;
 
   configCreditos.forEach(cred => {
@@ -851,7 +822,6 @@ window.cargarModuloCreditosDetallado = async function() {
 
   let html = `<div class="space-y-4">`;
 
-  // 2. Renderizar Tarjeta Global de Deuda Total
   if (globalTotalPen > 0) {
       html += `
       <div class="bg-slate-900 rounded-3xl p-5 text-white shadow-xl shadow-slate-900/20 relative overflow-hidden animate-fade-in">
@@ -867,7 +837,6 @@ window.cargarModuloCreditosDetallado = async function() {
       </div>`;
   }
 
-  // 3. Renderizar Tarjetas Individuales por Crédito
   configCreditos.forEach(cred => {
       let cuotas = [...((cacheDatos[cred.clave] || {}).data || [])];
       cuotas.sort((a, b) => (a.proximo_vencimiento||a.fecha||'9999').localeCompare(b.proximo_vencimiento||b.fecha||'9999'));
@@ -1021,7 +990,7 @@ window.enviarIngreso = async function(e) {
   }
 }
 
-/* EDICIÓN Y ELIMINACIÓN REFORZADA (AHORA CON BOTÓN ROJO DE BORRAR) */
+/* EDICIÓN Y ELIMINACIÓN REFORZADA */
 window.eliminarMov = async function(id, tipo) {
   if (!confirm('¿Seguro que deseas eliminar este registro permanentemente?')) return;
   const tabla = tipo === 'Gasto' ? 'gastos' : 'ingresos';
@@ -1121,7 +1090,6 @@ function renderConfiguracion() {
       <p class="text-xs font-bold text-slate-800 mb-1.5">${esc(grp)}</p>
       <div class="space-y-1">`;
     grupos[grp].forEach(c => {
-      // AQUÍ INYECTAMOS EL BOTÓN DE LÁPIZ PARA EDITAR
       html += `
       <div class="flex justify-between items-center text-[11px] border-b border-slate-50 pb-1 pt-1 group">
         <span class="text-slate-700 font-bold">${esc(c.categoria)}</span>
@@ -1201,7 +1169,6 @@ window.guardarEdicionCategoria = async function() {
         const btn = document.querySelector('#modalEditCat button.bg-sky-500');
         if(btn) { btn.innerText = 'Guardando...'; btn.disabled = true; }
 
-        // 1. Actualizar la base de configuracion
         const { error: errConf } = await supabase.from('configuracion').update({
             categoria: nuevoNombre,
             grupo: tipo.toLowerCase() === 'gasto' ? nuevoGrupo : null,
@@ -1209,7 +1176,6 @@ window.guardarEdicionCategoria = async function() {
         }).eq('id', id);
         if (errConf) throw errConf;
         
-        // 2. Actualizar gastos o ingresos históricos para que no queden huérfanos
         if (nuevoNombre !== viejoNombre) {
             const tabla = tipo.toLowerCase() === 'gasto' ? 'gastos' : 'ingresos';
             const { error: errHis } = await supabase.from(tabla).update({ categoria: nuevoNombre }).eq('categoria', viejoNombre);
@@ -1218,7 +1184,7 @@ window.guardarEdicionCategoria = async function() {
         
         toast('Categoría y registros actualizados', true);
         document.getElementById('modalEditCat').classList.add('hidden');
-        cargarDashboard(); // Recarga toda la interfaz para aplicar los cambios inmediatamente
+        cargarDashboard();
     } catch(e) {
         toast('Error: ' + e.message, false);
         const btn = document.querySelector('#modalEditCat button.bg-sky-500');
