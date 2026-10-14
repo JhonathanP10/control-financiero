@@ -64,7 +64,7 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-/* SISTEMA DE AUTH OFICIAL DE SUPABASE (CON RECUPERACIÓN) */
+/* SISTEMA DE AUTH OFICIAL DE SUPABASE */
 async function verificarAutenticacion() {
   let layer = document.getElementById('viewLogin');
   if (!layer) {
@@ -160,13 +160,50 @@ window.ejecutarLogin = async function(e) {
   }
 }
 
-window.recuperarContrasena = async function() {
+/* MODAL MODERNO PARA RECUPERAR CONTRASEÑA */
+window.recuperarContrasena = function() {
   const emailInput = document.getElementById('loginEmail');
-  let email = emailInput ? emailInput.value.trim() : '';
-  if (!email) {
-    email = prompt("Ingresa tu correo electrónico registrado:");
-    if (!email) return;
+  const emailSugerido = emailInput ? emailInput.value.trim() : '';
+
+  let modalRecu = document.getElementById('modalRecuperacion');
+  if (!modalRecu) {
+    modalRecu = document.createElement('div');
+    modalRecu.id = 'modalRecuperacion';
+    modalRecu.className = 'fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in';
+    document.body.appendChild(modalRecu);
   }
+
+  modalRecu.innerHTML = `
+    <div class="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 text-center">
+      <div class="w-14 h-14 bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center mx-auto mb-3 text-2xl shadow-inner">
+        <i class="fa-solid fa-key"></i>
+      </div>
+      <h2 class="text-lg font-bold text-slate-800 mb-1">Recuperar Contraseña</h2>
+      <p class="text-xs text-slate-400 mb-5">Ingresa tu correo electrónico registrado para enviarte las instrucciones.</p>
+      
+      <form onsubmit="window.enviarRecuperacion(event)" class="space-y-3.5 text-left">
+        <div>
+          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Correo Electrónico</label>
+          <input type="email" id="emailRecuperacion" required value="${esc(emailSugerido)}" placeholder="tu@correo.com" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-sky-500">
+        </div>
+        <div class="flex gap-2 mt-4">
+          <button type="button" onclick="document.getElementById('modalRecuperacion').remove()" class="flex-1 bg-slate-100 active:scale-95 text-slate-600 font-bold py-3 rounded-2xl text-xs transition-all">Cancelar</button>
+          <button type="submit" id="btnEnviarRecu" class="flex-1 bg-sky-500 active:scale-95 text-white font-bold py-3 rounded-2xl text-xs shadow-lg shadow-sky-500/30 transition-all">Enviar Enlace</button>
+        </div>
+      </form>
+    </div>
+  `;
+  modalRecu.classList.remove('hidden');
+};
+
+window.enviarRecuperacion = async function(e) {
+  if(e) e.preventDefault();
+  const email = document.getElementById('emailRecuperacion').value.trim();
+  const btn = document.getElementById('btnEnviarRecu');
+  if(!email) { toast('Ingresa un correo válido', false); return; }
+
+  btn.innerText = 'Enviando...';
+  btn.disabled = true;
 
   try {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -174,9 +211,12 @@ window.recuperarContrasena = async function() {
     });
     
     if (error) throw error;
-    toast("Te hemos enviado un correo con las instrucciones para recuperar tu contraseña.", true);
+    toast("¡Te hemos enviado un correo con las instrucciones!", true);
+    document.getElementById('modalRecuperacion').remove();
   } catch (err) {
     toast("Error al enviar el correo: " + err.message, false);
+    btn.innerText = 'Enviar Enlace';
+    btn.disabled = false;
   }
 };
 
