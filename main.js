@@ -498,13 +498,18 @@ function ocultarModulosSinUso() {
 
 function renderHeaderUsuario() {
   const dashView = document.getElementById('viewDash');
-  if (!dashView || !usuarioActual) return;
+  if (!dashView) return;
+
+  // Asegurar margen superior para evitar que toque el borde superior
+  dashView.classList.add('pt-3', 'lg:pt-4');
+
+  if (!usuarioActual) return;
 
   let headerDash = document.getElementById('headerDashUsuario');
   if (!headerDash) {
       headerDash = document.createElement('div');
       headerDash.id = 'headerDashUsuario';
-      headerDash.className = 'flex justify-between items-center bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm mb-4 w-full';
+      headerDash.className = 'flex justify-between items-center bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm mb-4 w-full mt-2';
       dashView.prepend(headerDash);
   }
   
@@ -830,24 +835,65 @@ function procesarYRenderizarDashboard() {
             if (g.total > 0) {
                 let subHtml = '';
                 const subs = Object.keys(g.subcats).map(k => ({cat: k, monto: g.subcats[k]})).sort((a,b) => b.monto - a.monto);
+                
                 subs.forEach(s => {
                     if (s.monto > 0) {
-                        subHtml += `<div class="flex justify-between items-center text-[10px] text-slate-500 py-1"><span class="truncate pr-2 pl-1 border-l-2 border-slate-200 ml-1.5">${esc(s.cat)}</span><span class="font-bold">${S(s.monto)}</span></div>`;
+                        // Filtrar movimientos específicos de esta categoría en el periodo actual, ordenados del más reciente al más antiguo
+                        const movsCat = cacheDatos.gastos.filter(item => {
+                            const fStr = item.fecha ? String(item.fecha).substring(0, 10) : '';
+                            return item.categoria === s.cat && fStr >= fDesdeStr && fStr <= fHastaStr;
+                        }).sort((a, b) => {
+                            const fA = a.fecha || '';
+                            const fB = b.fecha || '';
+                            if (fA === fB) return b.id - a.id;
+                            return fB > fA ? 1 : -1;
+                        });
+
+                        let movsHtml = '';
+                        movsCat.forEach(m => {
+                            movsHtml += `
+                            <div class="bg-white p-2 rounded-xl border border-slate-200/60 text-[10px] mb-1.5 flex items-center justify-between gap-2 shadow-2xs">
+                                <div class="min-w-0 flex-1">
+                                    <p class="font-bold text-slate-800 truncate">${esc(m.descripcion || 'Sin detalle')}</p>
+                                    <p class="text-[9px] text-slate-400">${esc(m.fecha)} · <i class="fa-solid fa-user text-sky-500"></i> ${esc(m.responsable || 'Jhonathan')}</p>
+                                </div>
+                                <div class="text-right flex items-center gap-2 flex-shrink-0">
+                                    <span class="font-bold text-slate-800">${S(m.monto)}</span>
+                                    <button onclick="window.editarMov(${m.id}, 'Gasto')" class="bg-slate-100 hover:bg-sky-50 hover:text-sky-600 text-slate-600 px-2 py-1 rounded-lg transition-colors flex items-center gap-1 font-bold border border-slate-200" title="Editar movimiento">
+                                        <i class="fa-solid fa-pen text-[9px]"></i> Editar
+                                    </button>
+                                </div>
+                            </div>`;
+                        });
+
+                        subHtml += `
+                        <details class="group/sub rounded-xl bg-slate-50 p-2 mb-1.5 border border-slate-200/60 transition-colors">
+                            <summary class="flex justify-between items-center text-[11px] cursor-pointer list-none select-none">
+                                <span class="font-bold text-slate-700 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-chevron-right text-[9px] text-slate-400 group-open/sub:rotate-90 transition-transform"></i> 
+                                    ${esc(s.cat)}
+                                </span>
+                                <span class="text-slate-600 font-bold">${S(s.monto)}</span>
+                            </summary>
+                            <div class="mt-2 pt-2 border-t border-slate-200/60 space-y-1 max-h-52 overflow-y-auto pr-1">
+                                ${movsHtml || '<p class="text-[10px] text-slate-400 text-center py-1">No hay movimientos en este periodo.</p>'}
+                            </div>
+                        </details>`;
                     }
                 });
 
                 panelGrp.innerHTML += `
-                <details class="group rounded-xl bg-slate-50 p-2.5 mb-2 border border-slate-100 hover:border-slate-200 transition-colors">
+                <details class="group rounded-2xl bg-white p-3 mb-2.5 border border-slate-200/80 hover:border-slate-300 transition-colors shadow-xs">
                     <summary class="flex flex-col cursor-pointer list-none outline-none select-none">
-                        <div class="flex justify-between items-center text-[11px] mb-1.5">
-                            <span class="font-bold text-slate-700 flex items-center gap-1.5"><i class="fa-solid fa-chevron-right text-[9px] text-slate-400 group-open:rotate-90 transition-transform"></i> ${esc(g.grupo)}</span>
-                            <span class="text-slate-600 font-bold">${S(g.total)}</span>
+                        <div class="flex justify-between items-center text-xs mb-1.5">
+                            <span class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-chevron-right text-[10px] text-slate-400 group-open:rotate-90 transition-transform"></i> ${esc(g.grupo)}</span>
+                            <span class="text-slate-800 font-black">${S(g.total)}</span>
                         </div>
-                        <div class="w-full bg-slate-200 rounded-full h-1.5">
+                        <div class="w-full bg-slate-100 rounded-full h-1.5">
                             <div class="bg-slate-800 h-1.5 rounded-full transition-all" style="width:${(g.total/maxG)*100}%"></div>
                         </div>
                     </summary>
-                    <div class="mt-2 space-y-0.5">
+                    <div class="mt-3 space-y-1 pt-1">
                         ${subHtml}
                     </div>
                 </details>`;
