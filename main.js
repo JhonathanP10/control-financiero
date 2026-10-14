@@ -500,8 +500,8 @@ function renderHeaderUsuario() {
   const dashView = document.getElementById('viewDash');
   if (!dashView) return;
 
-  // Asegurar margen superior para evitar que toque el borde superior
-  dashView.classList.add('pt-3', 'lg:pt-4');
+  // Margen superior seguro para evitar que toque el borde superior o barra de estado en celular
+  dashView.className = 'w-full pt-16 sm:pt-20 lg:pt-6 pb-24 lg:pb-8 px-4 max-w-7xl mx-auto';
 
   if (!usuarioActual) return;
 
@@ -838,7 +838,6 @@ function procesarYRenderizarDashboard() {
                 
                 subs.forEach(s => {
                     if (s.monto > 0) {
-                        // Filtrar movimientos específicos de esta categoría en el periodo actual, ordenados del más reciente al más antiguo
                         const movsCat = cacheDatos.gastos.filter(item => {
                             const fStr = item.fecha ? String(item.fecha).substring(0, 10) : '';
                             return item.categoria === s.cat && fStr >= fDesdeStr && fStr <= fHastaStr;
