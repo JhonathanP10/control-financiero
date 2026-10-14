@@ -418,6 +418,13 @@ window.aplicarRango = function() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Aplicar espaciado superior seguro a la barra superior global (Wallet)
+  const headerWallet = Array.from(document.querySelectorAll('div, header')).find(el => el.textContent && el.textContent.includes('Wallet') && el.textContent.includes('MI SALDO'));
+  if (headerWallet) {
+    headerWallet.style.paddingTop = '46px';
+    headerWallet.style.paddingBottom = '14px';
+  }
+
   const hoy = new Date();
   ['fechaGasto', 'fechaIngreso'].forEach(id => {
     const input = document.getElementById(id);
@@ -500,8 +507,7 @@ function renderHeaderUsuario() {
   const dashView = document.getElementById('viewDash');
   if (!dashView) return;
 
-  // Margen superior seguro para evitar que toque el borde superior o barra de estado en celular
-  dashView.className = 'w-full pt-16 sm:pt-20 lg:pt-6 pb-24 lg:pb-8 px-4 max-w-7xl mx-auto';
+  dashView.className = 'w-full pt-4 sm:pt-6 pb-24 lg:pb-8 px-4 max-w-7xl mx-auto';
 
   if (!usuarioActual) return;
 
