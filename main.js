@@ -418,12 +418,51 @@ window.aplicarRango = function() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Aplicar espaciado superior seguro a la barra superior global (Wallet)
-  const headerWallet = Array.from(document.querySelectorAll('div, header')).find(el => el.textContent && el.textContent.includes('Wallet') && el.textContent.includes('MI SALDO'));
-  if (headerWallet) {
-    headerWallet.style.paddingTop = '46px';
-    headerWallet.style.paddingBottom = '14px';
+
+  // --- CORRECCIÓN DEFINITIVA DE ESPACIADO EN MÓVILES (Notch / Barra de Estado) ---
+  if (!document.getElementById('mobile-notch-fix')) {
+      const style = document.createElement('style');
+      style.id = 'mobile-notch-fix';
+      style.innerHTML = `
+          @media (max-width: 768px) {
+              /* Empuja tu menú superior debajo del nuevo bloque protector */
+              .notch-safe-header {
+                  top: 45px !important;
+              }
+              /* Espacio seguro en la parte inferior para que no choque con la barra nativa */
+              body {
+                  padding-bottom: max(20px, env(safe-area-inset-bottom));
+              }
+          }
+      `;
+      document.head.appendChild(style);
   }
+
+  // Se crea un bloque blanco e invisible en la estructura para cubrir exactamente
+  // el espacio de la batería y la hora, para que el menú no choque con ellos.
+  if (!document.getElementById('notch-protector')) {
+      const protector = document.createElement('div');
+      protector.id = 'notch-protector';
+      protector.className = 'w-full bg-white/95 backdrop-blur-md z-[70] sticky top-0 block md:hidden';
+      protector.style.height = '45px';
+      document.body.insertBefore(protector, document.body.firstChild);
+  }
+
+  // Encuentra la barra de navegación superior (donde dice MI SALDO o Wallet)
+  // y le indica que debe detenerse al llegar a los 45px (debajo de nuestro protector)
+  const posiblesBarras = document.querySelectorAll('.sticky.top-0, .fixed.top-0');
+  posiblesBarras.forEach(barra => {
+      if (barra.textContent.includes('MI SALDO') || barra.textContent.includes('Wallet')) {
+          barra.classList.remove('top-0');
+          barra.classList.add('notch-safe-header');
+          // Garantizamos que esté siempre visible
+          if (!barra.classList.contains('z-50') && !barra.classList.contains('z-40')) {
+              barra.classList.add('z-50');
+          }
+      }
+  });
+  // --- FIN CORRECCIÓN ---
+
 
   const hoy = new Date();
   ['fechaGasto', 'fechaIngreso'].forEach(id => {
@@ -507,7 +546,8 @@ function renderHeaderUsuario() {
   const dashView = document.getElementById('viewDash');
   if (!dashView) return;
 
-  dashView.className = 'w-full pt-4 sm:pt-6 pb-24 lg:pb-8 px-4 max-w-7xl mx-auto';
+  // Reseteamos a las clases estándar ya que la corrección del notch se hizo global arriba
+  dashView.className = 'w-full pb-24 lg:pb-8 px-4 max-w-7xl mx-auto';
 
   if (!usuarioActual) return;
 
@@ -515,7 +555,7 @@ function renderHeaderUsuario() {
   if (!headerDash) {
       headerDash = document.createElement('div');
       headerDash.id = 'headerDashUsuario';
-      headerDash.className = 'flex justify-between items-center bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm mb-4 w-full mt-2';
+      headerDash.className = 'flex justify-between items-center bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm mb-4 w-full mt-4';
       dashView.prepend(headerDash);
   }
   
