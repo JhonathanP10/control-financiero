@@ -58,13 +58,6 @@ async function fetchSafe(...nombresPosibles) {
   return { tabla: '', data: [] };
 }
 
-/* REGISTRO DE SERVICE WORKER PARA APP MÓVIL (PWA) */
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW error:', err));
-  });
-}
-
 /* SISTEMA DE AUTH PROFESIONAL Y SEGURO */
 async function verificarAutenticacion() {
   let layer = document.getElementById('viewLogin');
@@ -198,7 +191,7 @@ function inicializarRealtime() {
 
   supabase.channel('public-db-changes')
     .on('postgres_changes', { event: '*', schema: 'public' }, () => {
-      cargarDashboard(true); // Recarga silenciosa en tiempo real
+      cargarDashboard(true);
     })
     .subscribe();
 }
@@ -465,13 +458,12 @@ document.addEventListener('DOMContentLoaded', () => {
   verificarAutenticacion();
 });
 
-window.cargarDashboard = async function() {
+/* CARGA BLINDADA Y ROBUSTA CONTRA ERRORES DE RED O TABLAS */
+window.cargarDashboard = async function(silencioso = false) {
   try {
-    const [resG, resI, resC] = await Promise.all([
-      supabase.from('gastos').select('*').limit(50000).order('id', { ascending: false }),
-      supabase.from('ingresos').select('*').limit(50000).order('id', { ascending: false }),
-      supabase.from('configuracion').select('*').limit(5000)
-    ]);
+    const resG = await supabase.from('gastos').select('*').limit(50000).order('id', { ascending: false }).catch(e => ({ error: e, data: [] }));
+    const resI = await supabase.from('ingresos').select('*').limit(50000).order('id', { ascending: false }).catch(e => ({ error: e, data: [] }));
+    const resC = await supabase.from('configuracion').select('*').limit(5000).catch(e => ({ error: e, data: [] }));
 
     cacheDatos.gastos = (!resG.error && resG.data) ? resG.data.map(normalizar) : [];
     cacheDatos.ingresos = (!resI.error && resI.data) ? resI.data.map(normalizar) : [];
@@ -483,7 +475,7 @@ window.cargarDashboard = async function() {
 
     procesarYRenderizarDashboard();
   } catch (err) {
-    toast('Error al sincronizar datos. Verifica tu conexión.', false);
+    if(!silencioso) toast('Error al sincronizar datos. Revisa la consola (F12).', false);
   }
 }
 
@@ -528,7 +520,6 @@ function garantizarContenedoresDashboard() {
   const dashView = document.getElementById('viewDash');
   if (!dashView) return;
 
-  // 1. Asegurar contenedor de Presupuestos
   if (!document.getElementById('panelPresupuestos')) {
     let divPres = document.createElement('div');
     divPres.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm mb-4 animate-fade-in';
@@ -545,7 +536,6 @@ function garantizarContenedoresDashboard() {
     dashView.appendChild(divPres);
   }
 
-  // 2. Asegurar contenedor de Gastos por Grupo
   if (!document.getElementById('panelGrupos')) {
     let divGrp = document.createElement('div');
     divGrp.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm mb-4 animate-fade-in';
@@ -556,7 +546,6 @@ function garantizarContenedoresDashboard() {
     dashView.appendChild(divGrp);
   }
 
-  // 3. Asegurar barra de búsqueda y botón CSV sobre el listado de movimientos
   let panelMovCard = document.getElementById('panelMovimientos')?.closest('.bg-white') || document.querySelector('#viewDash .bg-white:last-child');
   if (panelMovCard && !document.getElementById('inputBusquedaMovimientos')) {
     const headerMov = panelMovCard.querySelector('h3, h2, p') || panelMovCard.firstElementChild;
@@ -873,7 +862,6 @@ function procesarYRenderizarDashboard() {
       return fB > fA ? 1 : -1;
     });
 
-    // Aplicar filtro de búsqueda de texto si existe
     const filtrados = movimientos.filter(m => {
       if (!filtroBusquedaMovimientos) return true;
       const texto = `${m.categoria} ${m.responsable} ${m.detalle}`.toLowerCase();
