@@ -48,7 +48,6 @@ function normalizar(obj) {
   return nuevo;
 }
 
-// Función auxiliar segura para consultas a Supabase
 async function safeQuerySupabase(queryFn) {
   try {
     const { data, error } = await queryFn();
@@ -444,7 +443,13 @@ document.addEventListener('DOMContentLoaded', () => {
       btnRango.dataset.preset = 'rango';
       btnRango.className = 'chip px-3.5 py-1.5 rounded-xl text-[11px] font-bold flex-shrink-0 transition-colors';
       btnRango.innerText = 'Rango';
-      chipContainer.insertBefore(btnRango, document.getElementById('etiquetaPeriodo'));
+      
+      const etiquetaPer = document.getElementById('etiquetaPeriodo');
+      if (etiquetaPer && etiquetaPer.parentNode === chipContainer) {
+          chipContainer.insertBefore(btnRango, etiquetaPer);
+      } else {
+          chipContainer.appendChild(btnRango);
+      }
   }
 
   const headerBox = chipContainer?.parentElement;
@@ -465,7 +470,7 @@ document.addEventListener('DOMContentLoaded', () => {
   verificarAutenticacion();
 });
 
-/* CARGA BLINDADA USANDO EL HELPER SEGURO */
+/* CARGA BLINDADA */
 window.cargarDashboard = async function(silencioso = false) {
   try {
     const [resG, resI, resC] = await Promise.all([
@@ -571,7 +576,7 @@ function garantizarContenedoresDashboard() {
         <i class="fa-solid fa-file-excel"></i> Exportar CSV
       </button>
     `;
-    if (headerMov && headerMov.nextSibling) {
+    if (headerMov && headerMov.parentNode === panelMovCard && headerMov.nextSibling) {
       panelMovCard.insertBefore(barraFiltro, headerMov.nextSibling);
     } else {
       panelMovCard.prepend(barraFiltro);
@@ -751,7 +756,11 @@ function procesarYRenderizarDashboard() {
               <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Ingresos por Categoría</p>
               <div id="panelIngresosCat" class="flex flex-col gap-1.5 overflow-y-auto scroll-fino pr-1 flex-1"></div>
             `;
-            gridContainer.insertBefore(newBox, cardIngresos);
+            if (cardIngresos.parentNode === gridContainer) {
+                gridContainer.insertBefore(newBox, cardIngresos);
+            } else {
+                gridContainer.appendChild(newBox);
+            }
             panelIngCat = document.getElementById('panelIngresosCat');
         }
     }
@@ -910,8 +919,11 @@ function renderFondos() {
       contenedor.id = 'panelFondosCreditos';
       contenedor.className = 'mb-4 w-full';
       const header = document.getElementById('headerDashUsuario');
-      if(header && header.nextSibling) dashView.insertBefore(contenedor, header.nextSibling);
-      else dashView.appendChild(contenedor);
+      if(header && header.parentNode === dashView && header.nextSibling) {
+          dashView.insertBefore(contenedor, header.nextSibling);
+      } else {
+          dashView.appendChild(contenedor);
+      }
   }
 
   const hoyIso = iso(new Date());
