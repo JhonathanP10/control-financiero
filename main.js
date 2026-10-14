@@ -48,13 +48,24 @@ function normalizar(obj) {
   return nuevo;
 }
 
+// Función auxiliar segura para consultas a Supabase
+async function safeQuerySupabase(queryFn) {
+  try {
+    const { data, error } = await queryFn();
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (e) {
+    return { data: [], error: e };
+  }
+}
+
 async function fetchSafe(...nombresPosibles) {
   for (let nombre of nombresPosibles) {
     if (!nombre) continue;
-    try {
-      let { data, error } = await supabase.from(nombre).select('*').limit(5000);
-      if (!error && data) return { tabla: nombre, data: data.map(normalizar) };
-    } catch (e) {}
+    const res = await safeQuerySupabase(() => supabase.from(nombre).select('*').limit(5000));
+    if (!res.error && res.data.length > 0) {
+      return { tabla: nombre, data: res.data.map(normalizar) };
+    }
   }
   return { tabla: '', data: [] };
 }
@@ -454,18 +465,18 @@ document.addEventListener('DOMContentLoaded', () => {
   verificarAutenticacion();
 });
 
-/* CARGA BLINDADA Y ROBUSTA CONTRA CUALQUIER EXCEPCIÓN */
+/* CARGA BLINDADA USANDO EL HELPER SEGURO */
 window.cargarDashboard = async function(silencioso = false) {
   try {
     const [resG, resI, resC] = await Promise.all([
-      supabase.from('gastos').select('*').limit(50000).order('id', { ascending: false }).catch(e => ({ error: e, data: [] })),
-      supabase.from('ingresos').select('*').limit(50000).order('id', { ascending: false }).catch(e => ({ error: e, data: [] })),
-      supabase.from('configuracion').select('*').limit(5000).catch(e => ({ error: e, data: [] }))
+      safeQuerySupabase(() => supabase.from('gastos').select('*').limit(50000).order('id', { ascending: false })),
+      safeQuerySupabase(() => supabase.from('ingresos').select('*').limit(50000).order('id', { ascending: false })),
+      safeQuerySupabase(() => supabase.from('configuracion').select('*').limit(5000))
     ]);
 
-    cacheDatos.gastos = (!resG.error && resG.data) ? resG.data.map(normalizar) : [];
-    cacheDatos.ingresos = (!resI.error && resI.data) ? resI.data.map(normalizar) : [];
-    cacheDatos.configuracion = (!resC.error && resC.data) ? resC.data.map(normalizar) : [];
+    cacheDatos.gastos = resG.data.map(normalizar);
+    cacheDatos.ingresos = resI.data.map(normalizar);
+    cacheDatos.configuracion = resC.data.map(normalizar);
 
     cacheDatos.bcp = await fetchSafe('bcp_credito', 'bcp', 'bcpcredito');
     cacheDatos.bbva_credito = await fetchSafe('bbva_credito', 'bbvacredito', 'bbva');
