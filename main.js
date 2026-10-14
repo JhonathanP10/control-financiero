@@ -6,7 +6,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 let usuarioActual = null;
-let periodo = { preset: 'mes', offset: '0', desde: null, hasta: null };
+let periodo = { preset: 'mes', offset: 0, desde: null, hasta: null };
 let cacheDatos = { 
   gastos: [], ingresos: [], configuracion: [], 
   bcp: {tabla:'bcp_credito', data:[]}, 
@@ -74,7 +74,6 @@ async function verificarAutenticacion() {
     document.body.appendChild(layer);
   }
 
-  // Mostrar diseño de carga inicial limpio mientras verifica
   layer.innerHTML = `
     <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-md w-full shadow-2xl text-center relative overflow-hidden animate-fade-in">
       <div class="absolute -top-24 -right-24 w-48 h-48 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -509,6 +508,40 @@ function renderHeaderUsuario() {
     </button>`;
 }
 
+/* FUNCIÓN DE RESPALDO: GARANTIZA QUE LOS CONTENEDORES EXISTAN SIEMPRE EN EL DOM */
+function garantizarContenedoresDashboard() {
+  const dashView = document.getElementById('viewDash');
+  if (!dashView) return;
+
+  // 1. Asegurar contenedor de Presupuestos si no existe en el HTML
+  if (!document.getElementById('panelPresupuestos')) {
+    let divPres = document.createElement('div');
+    divPres.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm mb-4 animate-fade-in';
+    divPres.innerHTML = `
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Presupuestos por Categoría</h3>
+        <span id="totalPresupuestos" class="text-xs font-bold text-slate-600">0.00 / 0.00</span>
+      </div>
+      <div class="w-full bg-slate-100 rounded-full h-1.5 mb-3">
+        <div id="barraTotalPresupuestos" class="bg-sky-500 h-1.5 rounded-full transition-all" style="width: 0%"></div>
+      </div>
+      <div id="panelPresupuestos" class="space-y-3"></div>
+    `;
+    dashView.appendChild(divPres);
+  }
+
+  // 2. Asegurar contenedor de Gastos por Grupo si no existe en el HTML
+  if (!document.getElementById('panelGrupos')) {
+    let divGrp = document.createElement('div');
+    divGrp.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm mb-4 animate-fade-in';
+    divGrp.innerHTML = `
+      <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3">Gastos por Grupo</h3>
+      <div id="panelGrupos" class="space-y-2"></div>
+    `;
+    dashView.appendChild(divGrp);
+  }
+}
+
 /* LÓGICA PRINCIPAL DEL DASHBOARD Y FILTROS */
 function procesarYRenderizarDashboard() {
   const filtro = calcularRango();
@@ -517,6 +550,7 @@ function procesarYRenderizarDashboard() {
 
   renderHeaderUsuario();
   ocultarModulosSinUso();
+  garantizarContenedoresDashboard(); // Garantiza que Presupuestos y Grupos existan
 
   const selGasto = document.getElementById('categoriaGasto');
   const selIng = document.getElementById('categoriaIngreso');
@@ -652,7 +686,7 @@ function procesarYRenderizarDashboard() {
     elRes.className = 'text-[10px] mt-1 font-bold ' + (resPer >= 0 ? 'text-emerald-600' : 'text-rose-600');
   }
 
-  // 3. INYECCIÓN DEL DETALLE DE INGRESOS
+  // 3. INYECCIÓN DEL DETALLE DE INGRESOS POR CATEGORÍA
   let oldPanel = document.getElementById('panelIngresosCat');
   if (oldPanel && oldPanel.closest('.mt-4') && !oldPanel.closest('.min-h-[140px]')) {
       oldPanel.parentElement.remove();
@@ -678,6 +712,19 @@ function procesarYRenderizarDashboard() {
           
           gridContainer.insertBefore(newBox, cardIngresos);
           panelIngCat = document.getElementById('panelIngresosCat');
+      } else {
+          // Si no hay tarjeta de ingresos, creamos una tarjeta dedicada en el dashboard
+          const dashView = document.getElementById('viewDash');
+          if (dashView) {
+              let fallbackBox = document.createElement('div');
+              fallbackBox.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm mb-4 animate-fade-in';
+              fallbackBox.innerHTML = `
+                <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Ingresos por Categoría</p>
+                <div id="panelIngresosCat" class="flex flex-col gap-1.5 overflow-y-auto scroll-fino pr-1 max-h-48"></div>
+              `;
+              dashView.prepend(fallbackBox);
+              panelIngCat = document.getElementById('panelIngresosCat');
+          }
       }
   }
 
