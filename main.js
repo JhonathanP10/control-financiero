@@ -7,6 +7,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 let usuarioActual = null;
 let periodo = { preset: 'mes', offset: 0, desde: null, hasta: null };
+let filtroBusquedaMovimientos = '';
 let cacheDatos = { 
   gastos: [], ingresos: [], configuracion: [], 
   bcp: {tabla:'bcp_credito', data:[]}, 
@@ -146,6 +147,7 @@ async function verificarAutenticacion() {
     }
     
     layer.classList.add('hidden');
+    inicializarRealtime();
     cargarDashboard();
   }
 }
@@ -180,12 +182,25 @@ window.ejecutarLogin = async function(e) {
     }
 
     toast(`¡Bienvenido, ${usuarioActual}!`, true);
+    inicializarRealtime();
     verificarAutenticacion();
   } catch (err) {
     toast('Credenciales incorrectas o error de acceso', false);
     btn.innerText = 'Iniciar Sesión';
     btn.disabled = false;
   }
+}
+
+/* SUPABASE REALTIME: SINCRONIZACIÓN AUTOMÁTICA EN VIVO */
+function inicializarRealtime() {
+  if (window._realtimeIniciado) return;
+  window._realtimeIniciado = true;
+
+  supabase.channel('public-db-changes')
+    .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+      cargarDashboard(true); // Recarga silenciosa en tiempo real
+    })
+    .subscribe();
 }
 
 /* MODAL MODERNO PARA RECUPERAR CONTRASEÑA */
@@ -508,12 +523,12 @@ function renderHeaderUsuario() {
     </button>`;
 }
 
-/* FUNCIÓN DE RESPALDO: GARANTIZA QUE LOS CONTENEDORES EXISTAN SIEMPRE EN EL DOM */
+/* GARANTIZA CONTENEDORES Y AÑADE BARRA DE BÚSQUEDA Y EXPORTACIÓN CSV */
 function garantizarContenedoresDashboard() {
   const dashView = document.getElementById('viewDash');
   if (!dashView) return;
 
-  // 1. Asegurar contenedor de Presupuestos si no existe en el HTML
+  // 1. Asegurar contenedor de Presupuestos
   if (!document.getElementById('panelPresupuestos')) {
     let divPres = document.createElement('div');
     divPres.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm mb-4 animate-fade-in';
@@ -530,7 +545,7 @@ function garantizarContenedoresDashboard() {
     dashView.appendChild(divPres);
   }
 
-  // 2. Asegurar contenedor de Gastos por Grupo si no existe en el HTML
+  // 2. Asegurar contenedor de Gastos por Grupo
   if (!document.getElementById('panelGrupos')) {
     let divGrp = document.createElement('div');
     divGrp.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm mb-4 animate-fade-in';
@@ -540,6 +555,60 @@ function garantizarContenedoresDashboard() {
     `;
     dashView.appendChild(divGrp);
   }
+
+  // 3. Asegurar barra de búsqueda y botón CSV sobre el listado de movimientos
+  let panelMovCard = document.getElementById('panelMovimientos')?.closest('.bg-white') || document.querySelector('#viewDash .bg-white:last-child');
+  if (panelMovCard && !document.getElementById('inputBusquedaMovimientos')) {
+    const headerMov = panelMovCard.querySelector('h3, h2, p') || panelMovCard.firstElementChild;
+    const barraFiltro = document.createElement('div');
+    barraFiltro.className = 'flex flex-col sm:flex-row gap-2 mt-3 mb-3';
+    barraFiltro.innerHTML = `
+      <div class="relative flex-1">
+        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-xs">
+          <i class="fa-solid fa-search"></i>
+        </span>
+        <input type="text" id="inputBusquedaMovimientos" oninput="window.filtrarMovimientosBusqueda(this.value)" placeholder="Buscar por categoría, detalle o responsable..." class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-sky-500">
+      </div>
+      <button onclick="window.exportarCSV()" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold px-3.5 py-2 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 border border-emerald-200 flex-shrink-0">
+        <i class="fa-solid fa-file-excel"></i> Exportar CSV
+      </button>
+    `;
+    if (headerMov && headerMov.nextSibling) {
+      panelMovCard.insertBefore(barraFiltro, headerMov.nextSibling);
+    } else {
+      panelMovCard.prepend(barraFiltro);
+    }
+  }
+}
+
+window.filtrarMovimientosBusqueda = function(valor) {
+  filtroBusquedaMovimientos = valor.toLowerCase().trim();
+  procesarYRenderizarDashboard();
+}
+
+window.exportarCSV = function() {
+  const filtro = calcularRango();
+  const fDesdeStr = filtro.desde;
+  const fHastaStr = filtro.hasta;
+
+  let lineas = ["ID,Tipo,Fecha,Categoria,Monto,Responsable,Detalle"];
+
+  [...cacheDatos.gastos, ...cacheDatos.ingresos].forEach(m => {
+    const fStr = (m.fecha || '').substring(0, 10);
+    if (fStr >= fDesdeStr && fStr <= fHastaStr) {
+      const tipo = m.descripcion !== undefined ? 'Gasto' : 'Ingreso';
+      const detalle = (m.descripcion || m.comentario || '').replace(/,/g, ' ');
+      lineas.push(`${m.id},${tipo},${fStr},"${m.categoria}",${m.monto},${m.responsable || 'Jhonathan'},"${detalle}"`);
+    }
+  });
+
+  const blob = new Blob([lineas.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `reporte_financiero_${fDesdeStr}_al_${fHastaStr}.csv`;
+  a.click();
+  toast('Reporte CSV exportado con éxito', true);
 }
 
 /* LÓGICA PRINCIPAL DEL DASHBOARD Y FILTROS */
@@ -550,7 +619,7 @@ function procesarYRenderizarDashboard() {
 
   renderHeaderUsuario();
   ocultarModulosSinUso();
-  garantizarContenedoresDashboard(); // Garantiza que Presupuestos y Grupos existan
+  garantizarContenedoresDashboard();
 
   const selGasto = document.getElementById('categoriaGasto');
   const selIng = document.getElementById('categoriaIngreso');
@@ -605,24 +674,12 @@ function procesarYRenderizarDashboard() {
   }
 
   if(document.getElementById('saldoDisponible')) document.getElementById('saldoDisponible').innerText = S(saldoHist);
-  
   if(document.getElementById('sbSaldo')) document.getElementById('sbSaldo').innerText = S(saldoMiUsuario);
   
   if(document.getElementById('sbSaldoMovil')) {
       const elMovil = document.getElementById('sbSaldoMovil');
       elMovil.innerText = S(saldoMiUsuario);
-      
-      if (elMovil.previousElementSibling) {
-          elMovil.previousElementSibling.innerText = 'MI SALDO';
-      }
-
-      const headerTop = elMovil.closest('header') || elMovil.parentElement.parentElement;
-      if (headerTop) {
-          headerTop.style.paddingTop = 'max(1rem, env(safe-area-inset-top))';
-          headerTop.style.paddingBottom = '0.75rem';
-          headerTop.style.display = 'flex';
-          headerTop.style.alignItems = 'center';
-      }
+      if (elMovil.previousElementSibling) elMovil.previousElementSibling.innerText = 'MI SALDO';
   }
 
   if(document.getElementById('sbIngresos')) document.getElementById('sbIngresos').innerText = totalIngresos.toLocaleString('es-PE', { minimumFractionDigits: 2 });
@@ -686,45 +743,22 @@ function procesarYRenderizarDashboard() {
     elRes.className = 'text-[10px] mt-1 font-bold ' + (resPer >= 0 ? 'text-emerald-600' : 'text-rose-600');
   }
 
-  // 3. INYECCIÓN DEL DETALLE DE INGRESOS POR CATEGORÍA
-  let oldPanel = document.getElementById('panelIngresosCat');
-  if (oldPanel && oldPanel.closest('.mt-4') && !oldPanel.closest('.min-h-[140px]')) {
-      oldPanel.parentElement.remove();
-  }
-
+  // 3. INYECCIÓN DEL DETALLE DE INGRESOS
   let panelIngCat = document.getElementById('panelIngresosCat');
   if (!panelIngCat) {
       const cardIngresos = document.getElementById('periodoIngresos')?.closest('.bg-white');
       if(cardIngresos && cardIngresos.parentElement) {
           const gridContainer = cardIngresos.parentElement;
-          
           gridContainer.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4';
           
-          const cardSaldo = document.getElementById('saldoDisponible')?.closest('.bg-slate-900');
-          if (cardSaldo) cardSaldo.className = 'bg-slate-900 rounded-3xl p-5 text-white shadow-xl shadow-slate-900/20 relative overflow-hidden flex flex-col justify-between sm:col-span-2 lg:col-span-1 min-h-[140px]';
-
           const newBox = document.createElement('div');
           newBox.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col min-h-[140px] animate-fade-in';
           newBox.innerHTML = `
             <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Ingresos por Categoría</p>
             <div id="panelIngresosCat" class="flex flex-col gap-1.5 overflow-y-auto scroll-fino pr-1 flex-1"></div>
           `;
-          
           gridContainer.insertBefore(newBox, cardIngresos);
           panelIngCat = document.getElementById('panelIngresosCat');
-      } else {
-          // Si no hay tarjeta de ingresos, creamos una tarjeta dedicada en el dashboard
-          const dashView = document.getElementById('viewDash');
-          if (dashView) {
-              let fallbackBox = document.createElement('div');
-              fallbackBox.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm mb-4 animate-fade-in';
-              fallbackBox.innerHTML = `
-                <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Ingresos por Categoría</p>
-                <div id="panelIngresosCat" class="flex flex-col gap-1.5 overflow-y-auto scroll-fino pr-1 max-h-48"></div>
-              `;
-              dashView.prepend(fallbackBox);
-              panelIngCat = document.getElementById('panelIngresosCat');
-          }
       }
   }
 
@@ -751,7 +785,7 @@ function procesarYRenderizarDashboard() {
               });
           }
       });
-      if(panelIngCat.innerHTML === '') panelIngCat.innerHTML = '<p class="text-[10px] text-slate-400 py-2">No hay ingresos registrados en este rango de fechas.</p>';
+      if(panelIngCat.innerHTML === '') panelIngCat.innerHTML = '<p class="text-[10px] text-slate-400 py-2">No hay ingresos registrados en este rango.</p>';
   }
 
   // 4. RENDERIZAR PRESUPUESTOS Y BARRAS
@@ -788,7 +822,7 @@ function procesarYRenderizarDashboard() {
       barraPres.className = porcGlobal > 100 ? 'bg-rose-500 h-1.5 rounded-full transition-all' : (porcGlobal > 75 ? 'bg-amber-500 h-1.5 rounded-full transition-all' : 'bg-sky-500 h-1.5 rounded-full transition-all');
   }
 
-  // 5. RENDERIZAR GASTOS POR GRUPO CON DESPLEGABLES DE SUBCATEGORÍA
+  // 5. RENDERIZAR GASTOS POR GRUPO CON DESPLEGABLES
   const panelGrp = document.getElementById('panelGrupos');
   if(panelGrp) {
     panelGrp.innerHTML = '';
@@ -828,7 +862,7 @@ function procesarYRenderizarDashboard() {
     }
   }
 
-  // 6. RENDERIZAR MOVIMIENTOS
+  // 6. RENDERIZAR MOVIMIENTOS (CON FILTRO DE BÚSQUEDA)
   const panelMov = document.getElementById('panelMovimientos');
   if(panelMov) {
     panelMov.innerHTML = '';
@@ -839,10 +873,17 @@ function procesarYRenderizarDashboard() {
       return fB > fA ? 1 : -1;
     });
 
-    if (movimientos.length === 0) {
-        panelMov.innerHTML = '<p class="text-[11px] text-slate-400 py-2">No hay movimientos registrados en este rango.</p>';
+    // Aplicar filtro de búsqueda de texto si existe
+    const filtrados = movimientos.filter(m => {
+      if (!filtroBusquedaMovimientos) return true;
+      const texto = `${m.categoria} ${m.responsable} ${m.detalle}`.toLowerCase();
+      return texto.includes(filtroBusquedaMovimientos);
+    });
+
+    if (filtrados.length === 0) {
+        panelMov.innerHTML = '<p class="text-[11px] text-slate-400 py-2">No se encontraron movimientos con ese criterio.</p>';
     } else {
-        movimientos.slice(0, 40).forEach(m => {
+        filtrados.slice(0, 50).forEach(m => {
           const ing = m.tipo === 'Ingreso';
           panelMov.innerHTML += `
             <div class="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50 rounded-lg px-2 -mx-2 transition-colors group" onclick="editarMov(${m.id}, '${m.tipo}')">
@@ -866,7 +907,7 @@ function procesarYRenderizarDashboard() {
   renderFondos();
 }
 
-/* RENDER DE FONDOS Y CRÉDITOS */
+/* RENDER DE FONDOS Y CRÉDITOS CON ALERTAS INTELIGENTES */
 function renderFondos() {
   const dashView = document.getElementById('viewDash');
   if(!dashView) return;
@@ -882,13 +923,14 @@ function renderFondos() {
   }
 
   const hoyIso = iso(new Date());
+  const hoyDate = new Date();
   const configCreditos = [
       { titulo: 'BCP Crédito', clave: 'bcp', nombreCat: 'bcp crédito' },
       { titulo: 'BBVA Crédito', clave: 'bbva_credito', nombreCat: 'bbva crédito' },
       { titulo: 'BBVA Tarjeta', clave: 'bbva_tarjeta', nombreCat: 'bbva tarjeta' }
   ];
 
-  let html = '<h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2.5 px-1 mt-4">Resumen de Créditos</h3><div class="grid grid-cols-1 sm:grid-cols-3 gap-3">';
+  let html = '<h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2.5 px-1 mt-4">Resumen de Créditos y Alertas</h3><div class="grid grid-cols-1 sm:grid-cols-3 gap-3">';
 
   configCreditos.forEach(cred => {
       const datosObj = cacheDatos[cred.clave] || {tabla:'', data:[]};
@@ -942,6 +984,17 @@ function renderFondos() {
       const prox = cuotasPendientes[0];
       const montoProxVal = prox ? Number(prox.monto || prox.cuota || 0) : 0;
       const rawFecha = prox ? (prox.proximo_vencimiento || prox.vencimiento || prox.fecha || '') : '';
+      
+      let badgeAlerta = '';
+      if (rawFecha) {
+          const diffDias = Math.ceil((new Date(rawFecha) - hoyDate) / (1000 * 60 * 60 * 24));
+          if (diffDias < 0) {
+              badgeAlerta = `<span class="text-[9px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-md animate-pulse">¡Vencido!</span>`;
+          } else if (diffDias <= 3) {
+              badgeAlerta = `<span class="text-[9px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md animate-pulse">Vence en ${diffDias}d</span>`;
+          }
+      }
+
       const porc = (montoProxVal > 0) ? Math.min(100, (fondoDisponible / montoProxVal) * 100) : 100;
       const color = porc >= 100 ? 'bg-emerald-500' : 'bg-sky-500';
 
@@ -949,7 +1002,10 @@ function renderFondos() {
         <div class="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-sm">
           <div class="flex justify-between items-center mb-2">
             <span class="text-xs font-bold text-slate-800">${esc(cred.titulo)}</span>
-            <span class="text-[10px] font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100">${S(fondoDisponible)} abono</span>
+            <div class="flex items-center gap-1">
+              ${badgeAlerta}
+              <span class="text-[10px] font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100">${S(fondoDisponible)}</span>
+            </div>
           </div>
           ${prox ? `
             <div class="flex justify-between items-end text-[11px] mb-1">
