@@ -64,7 +64,7 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-/* SISTEMA DE AUTH OFICIAL DE SUPABASE (CORREO LIBRE) */
+/* SISTEMA DE AUTH OFICIAL DE SUPABASE (CON RECUPERACIÓN) */
 async function verificarAutenticacion() {
   let layer = document.getElementById('viewLogin');
   if (!layer) {
@@ -98,6 +98,11 @@ async function verificarAutenticacion() {
           <button type="submit" id="btnIngresarApp" class="w-full bg-slate-900 active:scale-95 text-white font-bold py-3.5 rounded-2xl text-sm shadow-lg shadow-slate-900/20 transition-all mt-2">
             Ingresar al Sistema
           </button>
+          <div class="text-center mt-3">
+            <button type="button" onclick="window.recuperarContrasena()" class="text-xs text-sky-600 font-bold hover:underline">
+              ¿Olvidaste tu contraseña?
+            </button>
+          </div>
         </form>
       </div>`;
     layer.classList.remove('hidden');
@@ -154,6 +159,26 @@ window.ejecutarLogin = async function(e) {
     btn.disabled = false;
   }
 }
+
+window.recuperarContrasena = async function() {
+  const emailInput = document.getElementById('loginEmail');
+  let email = emailInput ? emailInput.value.trim() : '';
+  if (!email) {
+    email = prompt("Ingresa tu correo electrónico registrado:");
+    if (!email) return;
+  }
+
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
+    });
+    
+    if (error) throw error;
+    toast("Te hemos enviado un correo con las instrucciones para recuperar tu contraseña.", true);
+  } catch (err) {
+    toast("Error al enviar el correo: " + err.message, false);
+  }
+};
 
 window.cerrarSesion = async function() {
   await supabase.auth.signOut();
@@ -1136,7 +1161,6 @@ function renderConfiguracion() {
   html += '</div>';
   cont.innerHTML = html;
 
-  // Inyectar tarjeta para cambiar contraseña en la vista de ajustes
   const viewConfig = document.getElementById('viewConfig');
   if (viewConfig && !document.getElementById('seccionCambioClaveConfig')) {
       const divSeguridad = document.createElement('div');
