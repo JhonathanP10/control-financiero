@@ -5,12 +5,6 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-// Mapeo de usuarios a sus correos oficiales registrados en Supabase Auth
-const EMAILS_USUARIOS = {
-  'Jhonathan': 'perniajhonathan@gmail.com',
-  'Sindy': 'sindyrami27@gmail.com' // Cambia este correo si Sindy usó otro al registrarse
-};
-
 let usuarioActual = null;
 let periodo = { preset: 'mes', offset: 0, desde: null, hasta: null };
 let cacheDatos = { 
@@ -70,7 +64,7 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-/* SISTEMA DE AUTH OFICIAL DE SUPABASE */
+/* SISTEMA DE AUTH OFICIAL DE SUPABASE (CORREO LIBRE) */
 async function verificarAutenticacion() {
   let layer = document.getElementById('viewLogin');
   if (!layer) {
@@ -90,15 +84,12 @@ async function verificarAutenticacion() {
           <i class="fa-solid fa-shield-halved"></i>
         </div>
         <h2 class="text-lg font-bold text-slate-800 mb-1">Acceso Seguro</h2>
-        <p class="text-xs text-slate-400 mb-5">Autenticación oficial Supabase</p>
+        <p class="text-xs text-slate-400 mb-5">Ingresa con tu correo y contraseña</p>
         
         <form id="formLogin" onsubmit="window.ejecutarLogin(event)" class="space-y-3.5 text-left">
           <div>
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Usuario</label>
-            <select id="loginUsuario" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-sky-500">
-              <option value="Jhonathan">Jhonathan</option>
-              <option value="Sindy">Sindy</option>
-            </select>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Correo Electrónico</label>
+            <input type="email" id="loginEmail" required placeholder="tu@correo.com" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-sky-500">
           </div>
           <div>
             <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Contraseña</label>
@@ -111,9 +102,15 @@ async function verificarAutenticacion() {
       </div>`;
     layer.classList.remove('hidden');
   } else {
-    // Identificar qué usuario inició sesión según su correo
     const emailSesion = session.user.email.toLowerCase();
-    usuarioActual = Object.keys(EMAILS_USUARIOS).find(k => EMAILS_USUARIOS[k].toLowerCase() === emailSesion) || 'Jhonathan';
+    if (emailSesion.includes('jhonathan') || emailSesion.includes('pernia')) {
+        usuarioActual = 'Jhonathan';
+    } else if (emailSesion.includes('sindy')) {
+        usuarioActual = 'Sindy';
+    } else {
+        const parts = session.user.email.split('@')[0];
+        usuarioActual = parts.charAt(0).toUpperCase() + parts.slice(1);
+    }
     
     layer.classList.add('hidden');
     cargarDashboard();
@@ -122,15 +119,11 @@ async function verificarAutenticacion() {
 
 window.ejecutarLogin = async function(e) {
   if(e) e.preventDefault();
-  const usu = document.getElementById('loginUsuario').value;
+  const email = document.getElementById('loginEmail').value.trim();
   const cla = document.getElementById('loginClave').value;
   const btn = document.getElementById('btnIngresarApp');
   
-  const email = EMAILS_USUARIOS[usu];
-  if (!email) {
-    toast('No hay correo configurado para este usuario', false);
-    return;
-  }
+  if(!email) { toast('Ingresa tu correo', false); return; }
 
   btn.innerText = 'Verificando...';
   btn.disabled = true;
@@ -143,8 +136,17 @@ window.ejecutarLogin = async function(e) {
 
     if (error) throw error;
 
-    usuarioActual = usu;
-    toast(`¡Bienvenido, ${usu}!`, true);
+    const emailLower = email.toLowerCase();
+    if (emailLower.includes('jhonathan') || emailLower.includes('pernia')) {
+        usuarioActual = 'Jhonathan';
+    } else if (emailLower.includes('sindy')) {
+        usuarioActual = 'Sindy';
+    } else {
+        const parts = email.split('@')[0];
+        usuarioActual = parts.charAt(0).toUpperCase() + parts.slice(1);
+    }
+
+    toast(`¡Bienvenido, ${usuarioActual}!`, true);
     verificarAutenticacion();
   } catch (err) {
     toast('Credenciales incorrectas o error de acceso', false);
@@ -157,6 +159,34 @@ window.cerrarSesion = async function() {
   await supabase.auth.signOut();
   usuarioActual = null;
   verificarAutenticacion();
+}
+
+/* CAMBIO DE CONTRASEÑA DESDE LA WEB */
+window.cambiarClaveWeb = async function(e) {
+  if(e) e.preventDefault();
+  const nuevaClave = document.getElementById('nuevaClaveWeb').value;
+  if (!nuevaClave || nuevaClave.length < 6) {
+    toast('La contraseña debe tener al menos 6 caracteres', false);
+    return;
+  }
+  
+  const btn = document.getElementById('btnCambiarClaveWeb');
+  btn.innerText = 'Actualizando...';
+  btn.disabled = true;
+
+  try {
+    const { error } = await supabase.auth.updateUser({ password: nuevaClave });
+    if (error) throw error;
+    
+    toast('¡Contraseña actualizada con éxito!', true);
+    document.getElementById('nuevaClaveWeb').value = '';
+    btn.innerText = 'Actualizar Contraseña';
+    btn.disabled = false;
+  } catch (err) {
+    toast('Error al actualizar contraseña: ' + err.message, false);
+    btn.innerText = 'Actualizar Contraseña';
+    btn.disabled = false;
+  }
 }
 
 /* NAVEGACIÓN Y VISTAS */
@@ -1072,7 +1102,7 @@ window.enviarEdicionMovimiento = async function(e) {
   }
 }
 
-/* EDICIÓN DE CATEGORÍAS */
+/* EDICIÓN DE CATEGORÍAS Y MÓDULO DE CAMBIO DE CLAVE EN CONFIG */
 function renderConfiguracion() {
   const cont = document.getElementById('contenedorGrupos');
   if(!cont) return;
@@ -1105,6 +1135,29 @@ function renderConfiguracion() {
   }
   html += '</div>';
   cont.innerHTML = html;
+
+  // Inyectar tarjeta para cambiar contraseña en la vista de ajustes
+  const viewConfig = document.getElementById('viewConfig');
+  if (viewConfig && !document.getElementById('seccionCambioClaveConfig')) {
+      const divSeguridad = document.createElement('div');
+      divSeguridad.id = 'seccionCambioClaveConfig';
+      divSeguridad.className = 'bg-white rounded-3xl border border-slate-200/80 p-4 shadow-sm mt-4';
+      divSeguridad.innerHTML = `
+        <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <i class="fa-solid fa-key text-sky-500"></i> Cambiar Contraseña
+        </h3>
+        <form onsubmit="window.cambiarClaveWeb(event)" class="space-y-3">
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Nueva Contraseña</label>
+                <input type="password" id="nuevaClaveWeb" required placeholder="Mínimo 6 caracteres" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold text-slate-800 outline-none focus:border-sky-500">
+            </div>
+            <button type="submit" id="btnCambiarClaveWeb" class="w-full bg-slate-900 active:scale-95 text-white font-bold py-2.5 rounded-xl text-xs shadow-md transition-all">
+                Actualizar Contraseña
+            </button>
+        </form>
+      `;
+      viewConfig.appendChild(divSeguridad);
+  }
 }
 
 window.abrirModalEdicionCategoria = function(id) {
