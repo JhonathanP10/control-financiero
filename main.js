@@ -419,48 +419,55 @@ window.aplicarRango = function() {
 
 document.addEventListener('DOMContentLoaded', () => {
 
-  // --- CORRECCIÓN DEFINITIVA DE ESPACIADO EN MÓVILES (Notch / Barra de Estado) ---
-  if (!document.getElementById('mobile-notch-fix')) {
-      const style = document.createElement('style');
-      style.id = 'mobile-notch-fix';
-      style.innerHTML = `
-          @media (max-width: 768px) {
-              /* Empuja tu menú superior debajo del nuevo bloque protector */
-              .notch-safe-header {
-                  top: 45px !important;
-              }
-              /* Espacio seguro en la parte inferior para que no choque con la barra nativa */
-              body {
-                  padding-bottom: max(20px, env(safe-area-inset-bottom));
-              }
-          }
-      `;
-      document.head.appendChild(style);
+  // --- CORRECCIÓN NATIVA DE ESPACIADO (SIN HUECOS BLANCOS) ---
+  // 1. Limpiar cualquier bloque extra del intento anterior
+  const badProtector = document.getElementById('notch-protector');
+  if (badProtector) badProtector.remove();
+  const badStyle = document.getElementById('mobile-notch-fix');
+  if (badStyle) badStyle.remove();
+
+  // 2. Habilitar soporte nativo de notch en el viewport (para iOS y Android moderno)
+  let vp = document.querySelector('meta[name="viewport"]');
+  if (vp && !vp.content.includes('viewport-fit=cover')) {
+      vp.content += ', viewport-fit=cover';
   }
 
-  // Se crea un bloque blanco e invisible en la estructura para cubrir exactamente
-  // el espacio de la batería y la hora, para que el menú no choque con ellos.
-  if (!document.getElementById('notch-protector')) {
-      const protector = document.createElement('div');
-      protector.id = 'notch-protector';
-      protector.className = 'w-full bg-white/95 backdrop-blur-md z-[70] sticky top-0 block md:hidden';
-      protector.style.height = '45px';
-      document.body.insertBefore(protector, document.body.firstChild);
-  }
-
-  // Encuentra la barra de navegación superior (donde dice MI SALDO o Wallet)
-  // y le indica que debe detenerse al llegar a los 45px (debajo de nuestro protector)
-  const posiblesBarras = document.querySelectorAll('.sticky.top-0, .fixed.top-0');
-  posiblesBarras.forEach(barra => {
-      if (barra.textContent.includes('MI SALDO') || barra.textContent.includes('Wallet')) {
-          barra.classList.remove('top-0');
-          barra.classList.add('notch-safe-header');
-          // Garantizamos que esté siempre visible
-          if (!barra.classList.contains('z-50') && !barra.classList.contains('z-40')) {
-              barra.classList.add('z-50');
+  // 3. Aplicar espaciado seguro directamente al contenedor superior
+  const candidatos = Array.from(document.querySelectorAll('div, header, nav')).filter(el => 
+      el.textContent && el.textContent.includes('Wallet') && el.textContent.includes('MI SALDO')
+  );
+  
+  if (candidatos.length > 0) {
+      let headerWallet = candidatos[0];
+      
+      // Buscar el contenedor padre real que esté pegado arriba
+      let curr = headerWallet;
+      while(curr && curr !== document.body) {
+          const pos = window.getComputedStyle(curr).position;
+          if (pos === 'sticky' || pos === 'fixed') {
+              headerWallet = curr;
+              break;
           }
+          curr = curr.parentElement;
       }
-  });
+      
+      // Limpiamos la clase vieja por si se quedó registrada
+      headerWallet.classList.remove('notch-safe-header');
+      headerWallet.style.top = '0px';
+      
+      // Añadimos el padding-top (22px es el estándar de Android, env() para iOS)
+      headerWallet.style.paddingTop = 'max(22px, env(safe-area-inset-top))';
+      
+      // IMPORTANTÍSIMO: Cambiamos la altura para que no aplaste tus textos internos si Tailwind le forzaba un tamaño (ej. h-16)
+      headerWallet.style.height = 'auto';
+      headerWallet.style.minHeight = 'fit-content';
+      
+      // Verificamos el fondo. Si es transparente por defecto, lo pintamos de blanco para que el padding quede del color del header.
+      const bg = window.getComputedStyle(headerWallet).backgroundColor;
+      if (bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
+          headerWallet.style.backgroundColor = '#ffffff';
+      }
+  }
   // --- FIN CORRECCIÓN ---
 
 
@@ -546,7 +553,6 @@ function renderHeaderUsuario() {
   const dashView = document.getElementById('viewDash');
   if (!dashView) return;
 
-  // Reseteamos a las clases estándar ya que la corrección del notch se hizo global arriba
   dashView.className = 'w-full pb-24 lg:pb-8 px-4 max-w-7xl mx-auto';
 
   if (!usuarioActual) return;
