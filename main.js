@@ -6,7 +6,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 let usuarioActual = null;
-let periodo = { preset: 'mes', offset: 0, desde: null, hasta: null };
+let periodo = { preset: 'mes', offset: '0', desde: null, hasta: null };
 let cacheDatos = { 
   gastos: [], ingresos: [], configuracion: [], 
   bcp: {tabla:'bcp_credito', data:[]}, 
@@ -64,42 +64,71 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-/* SISTEMA DE AUTH OFICIAL DE SUPABASE */
+/* SISTEMA DE AUTH PROFESIONAL Y SEGURO */
 async function verificarAutenticacion() {
   let layer = document.getElementById('viewLogin');
   if (!layer) {
     layer = document.createElement('div');
     layer.id = 'viewLogin';
-    layer.className = 'fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4';
+    layer.className = 'fixed inset-0 z-50 bg-slate-950 flex items-center justify-center p-4 transition-opacity duration-300';
     document.body.appendChild(layer);
   }
+
+  // Mostrar diseño de carga inicial limpio mientras verifica
+  layer.innerHTML = `
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-md w-full shadow-2xl text-center relative overflow-hidden animate-fade-in">
+      <div class="absolute -top-24 -right-24 w-48 h-48 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div class="absolute -bottom-24 -left-24 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div class="w-16 h-16 bg-gradient-to-tr from-sky-500 to-indigo-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl shadow-xl shadow-sky-500/20">
+        <i class="fa-solid fa-wallet"></i>
+      </div>
+      <h2 class="text-xl font-black text-white tracking-tight mb-1">Control Financiero</h2>
+      <p class="text-xs text-slate-400 mb-6 font-medium">Verificando sesión activa...</p>
+      
+      <div class="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+    </div>`;
+  layer.classList.remove('hidden');
 
   const { data: { session }, error } = await supabase.auth.getSession();
 
   if (error || !session) {
     usuarioActual = null;
     layer.innerHTML = `
-      <div class="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 text-center animate-fade-in">
-        <div class="w-14 h-14 bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center mx-auto mb-3 text-2xl shadow-inner">
-          <i class="fa-solid fa-shield-halved"></i>
+      <div class="bg-slate-900 border border-slate-800/80 rounded-3xl p-8 max-w-md w-full shadow-2xl text-center relative overflow-hidden animate-fade-in">
+        <div class="absolute -top-24 -right-24 w-48 h-48 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-24 -left-24 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="w-16 h-16 bg-gradient-to-tr from-sky-500 to-indigo-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl shadow-xl shadow-sky-500/20">
+          <i class="fa-solid fa-vault"></i>
         </div>
-        <h2 class="text-lg font-bold text-slate-800 mb-1">Acceso Seguro</h2>
-        <p class="text-xs text-slate-400 mb-5">Ingresa con tu correo y contraseña</p>
+        <h2 class="text-xl font-black text-white tracking-tight mb-1">Acceso al Sistema</h2>
+        <p class="text-xs text-slate-400 mb-6 font-medium">Ingresa tus credenciales para continuar</p>
         
-        <form id="formLogin" onsubmit="window.ejecutarLogin(event)" class="space-y-3.5 text-left">
+        <form id="formLogin" onsubmit="window.ejecutarLogin(event)" class="space-y-4 text-left relative z-10">
           <div>
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Correo Electrónico</label>
-            <input type="email" id="loginEmail" required placeholder="tu@correo.com" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-sky-500">
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 ml-1">Correo Electrónico</label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500 text-sm">
+                <i class="fa-solid fa-envelope"></i>
+              </span>
+              <input type="email" id="loginEmail" required placeholder="tu@correo.com" class="w-full bg-slate-950/60 border border-slate-800 rounded-2xl pl-11 pr-4 py-3.5 text-sm font-semibold text-white placeholder-slate-600 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all">
+            </div>
           </div>
           <div>
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Contraseña</label>
-            <input type="password" id="loginClave" required placeholder="••••••••" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-sky-500">
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 ml-1">Contraseña</label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500 text-sm">
+                <i class="fa-solid fa-lock"></i>
+              </span>
+              <input type="password" id="loginClave" required placeholder="••••••••" class="w-full bg-slate-950/60 border border-slate-800 rounded-2xl pl-11 pr-4 py-3.5 text-sm font-semibold text-white placeholder-slate-600 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-all">
+            </div>
           </div>
-          <button type="submit" id="btnIngresarApp" class="w-full bg-slate-900 active:scale-95 text-white font-bold py-3.5 rounded-2xl text-sm shadow-lg shadow-slate-900/20 transition-all mt-2">
-            Ingresar al Sistema
+          <button type="submit" id="btnIngresarApp" class="w-full bg-gradient-to-r from-sky-500 to-indigo-600 active:scale-95 text-white font-bold py-3.5 rounded-2xl text-sm shadow-lg shadow-sky-500/25 transition-all mt-2">
+            Iniciar Sesión
           </button>
-          <div class="text-center mt-3">
-            <button type="button" onclick="window.recuperarContrasena()" class="text-xs text-sky-600 font-bold hover:underline">
+          <div class="text-center pt-2">
+            <button type="button" onclick="window.recuperarContrasena()" class="text-xs text-sky-400 font-semibold hover:text-sky-300 transition-colors">
               ¿Olvidaste tu contraseña?
             </button>
           </div>
@@ -155,7 +184,7 @@ window.ejecutarLogin = async function(e) {
     verificarAutenticacion();
   } catch (err) {
     toast('Credenciales incorrectas o error de acceso', false);
-    btn.innerText = 'Ingresar al Sistema';
+    btn.innerText = 'Iniciar Sesión';
     btn.disabled = false;
   }
 }
@@ -174,20 +203,20 @@ window.recuperarContrasena = function() {
   }
 
   modalRecu.innerHTML = `
-    <div class="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 text-center">
-      <div class="w-14 h-14 bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center mx-auto mb-3 text-2xl shadow-inner">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center">
+      <div class="w-14 h-14 bg-sky-500/10 text-sky-400 rounded-2xl flex items-center justify-center mx-auto mb-3 text-2xl border border-sky-500/20">
         <i class="fa-solid fa-key"></i>
       </div>
-      <h2 class="text-lg font-bold text-slate-800 mb-1">Recuperar Contraseña</h2>
+      <h2 class="text-lg font-bold text-white mb-1">Recuperar Contraseña</h2>
       <p class="text-xs text-slate-400 mb-5">Ingresa tu correo electrónico registrado para enviarte las instrucciones.</p>
       
       <form onsubmit="window.enviarRecuperacion(event)" class="space-y-3.5 text-left">
         <div>
-          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Correo Electrónico</label>
-          <input type="email" id="emailRecuperacion" required value="${esc(emailSugerido)}" placeholder="tu@correo.com" class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-sky-500">
+          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Correo Electrónico</label>
+          <input type="email" id="emailRecuperacion" required value="${esc(emailSugerido)}" placeholder="tu@correo.com" class="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-sm font-semibold text-white outline-none focus:border-sky-500">
         </div>
         <div class="flex gap-2 mt-4">
-          <button type="button" onclick="document.getElementById('modalRecuperacion').remove()" class="flex-1 bg-slate-100 active:scale-95 text-slate-600 font-bold py-3 rounded-2xl text-xs transition-all">Cancelar</button>
+          <button type="button" onclick="document.getElementById('modalRecuperacion').remove()" class="flex-1 bg-slate-800 active:scale-95 text-slate-300 font-bold py-3 rounded-2xl text-xs transition-all">Cancelar</button>
           <button type="submit" id="btnEnviarRecu" class="flex-1 bg-sky-500 active:scale-95 text-white font-bold py-3 rounded-2xl text-xs shadow-lg shadow-sky-500/30 transition-all">Enviar Enlace</button>
         </div>
       </form>
