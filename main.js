@@ -553,7 +553,9 @@ function renderHeaderUsuario() {
   const dashView = document.getElementById('viewDash');
   if (!dashView) return;
 
-  dashView.className = 'w-full pb-24 lg:pb-8 px-4 max-w-7xl mx-auto';
+  // CORRECCIÓN: Respetamos la clase 'hidden' si la vista de registro o deudas está activa
+  const estaOculto = dashView.classList.contains('hidden');
+  dashView.className = 'w-full pb-24 lg:pb-8 px-4 max-w-7xl mx-auto' + (estaOculto ? ' hidden' : '');
 
   if (!usuarioActual) return;
 
@@ -1264,6 +1266,7 @@ window.enviarGasto = async function(e) {
     if(btn) { btn.innerText = 'Guardar Salida'; btn.disabled = false; }
     document.getElementById('formGasto')?.reset();
     toast('Gasto guardado con éxito', true);
+    mostrarVista('dash'); // Regresar limpiamente al panel
     cargarDashboard();
   } catch(err) {
     if(btn) { btn.innerText = 'Guardar Salida'; btn.disabled = false; }
@@ -1294,6 +1297,7 @@ window.enviarIngreso = async function(e) {
     if(btn) { btn.innerText = 'Guardar Entrada'; btn.disabled = false; }
     document.getElementById('formIngreso')?.reset();
     toast('Ingreso guardado con éxito', true);
+    mostrarVista('dash'); // Regresar limpiamente al panel
     cargarDashboard();
   } catch(err) {
     if(btn) { btn.innerText = 'Guardar Entrada'; btn.disabled = false; }
