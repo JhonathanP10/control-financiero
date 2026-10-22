@@ -358,7 +358,7 @@ function calcularRango() {
     const base = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + o * 7);
     const ds = (base.getDay() + 6) % 7;
     desde = new Date(base.getFullYear(), base.getMonth(), base.getDate() - ds);
-    hasta = new Date(desde.getFullYear(), desde.getMonth(), desde.getDate() + 6);
+    hasta = new Date(desde.getFullYear(), base.getMonth(), desde.getDate() + 6);
     etiqueta = dm(desde) + ' – ' + dm(hasta);
   } else if (periodo.preset === 'mes') {
     desde = new Date(hoy.getFullYear(), hoy.getMonth() + o, 1);
@@ -794,25 +794,18 @@ function procesarYRenderizarDashboard() {
       elRes.className = 'text-[10px] mt-1 font-bold ' + (resPer >= 0 ? 'text-emerald-600' : 'text-rose-600');
     }
 
+    // Inyección de Ingresos por Categoría en el contenedor preparado
     let panelIngCat = document.getElementById('panelIngresosCat');
-    if (!panelIngCat) {
-        const cardIngresos = document.getElementById('periodoIngresos')?.closest('.bg-white');
-        if(cardIngresos && cardIngresos.parentElement) {
-            const gridContainer = cardIngresos.parentElement;
-            gridContainer.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4';
-            const newBox = document.createElement('div');
-            newBox.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col min-h-[140px] animate-fade-in';
-            newBox.innerHTML = `
+    const contenedorDestino = document.getElementById('contenedorIngresosCategoria');
+    
+    if (!panelIngCat && contenedorDestino) {
+        contenedorDestino.innerHTML = `
+            <div class="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm flex flex-col h-full min-h-[140px] animate-fade-in">
               <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Ingresos por Categoría</p>
-              <div id="panelIngresosCat" class="flex flex-col gap-1.5 overflow-y-auto scroll-fino pr-1 flex-1"></div>
-            `;
-            if (cardIngresos.parentNode === gridContainer) {
-                gridContainer.insertBefore(newBox, cardIngresos);
-            } else {
-                gridContainer.appendChild(newBox);
-            }
-            panelIngCat = document.getElementById('panelIngresosCat');
-        }
+              <div id="panelIngresosCat" class="flex flex-col gap-1.5 overflow-y-auto scroll-fino pr-1 flex-1 max-h-[150px] lg:max-h-[200px]"></div>
+            </div>
+        `;
+        panelIngCat = document.getElementById('panelIngresosCat');
     }
 
     if (panelIngCat) {
