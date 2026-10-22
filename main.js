@@ -315,6 +315,11 @@ function mostrarVista(vista) {
     const fI = document.getElementById('fechaIngreso');
     if (fG && (!fG.value || fG.value === '')) fG.value = iso(hoy);
     if (fI && (!fI.value || fI.value === '')) fI.value = iso(hoy);
+    
+    const rG = document.getElementById('responsableGasto');
+    const rI = document.getElementById('responsableIngreso');
+    if (rG && usuarioActual) { rG.value = usuarioActual; rG.disabled = true; rG.classList.add('opacity-70'); }
+    if (rI && usuarioActual) { rI.value = usuarioActual; rI.disabled = true; rI.classList.add('opacity-70'); }
   }
   
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -650,7 +655,8 @@ window.exportarCSV = function() {
 
   [...cacheDatos.gastos, ...cacheDatos.ingresos].forEach(m => {
     const fStr = m.fecha ? String(m.fecha).substring(0, 10) : '';
-    if (fStr >= fDesdeStr && fStr <= fHastaStr) {
+    const resp = m.responsable || 'Jhonathan';
+    if (fStr >= fDesdeStr && fStr <= fHastaStr && resp === usuarioActual) {
       const tipo = m.descripcion !== undefined ? 'Gasto' : 'Ingreso';
       const detalle = String(m.descripcion || m.comentario || '').replace(/,/g, ' ');
       lineas.push(`${m.id},${tipo},${fStr},"${esc(m.categoria)}",${m.monto},${esc(m.responsable || 'Jhonathan')},"${detalle}"`);
@@ -758,13 +764,13 @@ function procesarYRenderizarDashboard() {
       const resp = i.responsable || 'Jhonathan';
       const cat = i.categoria || 'Otros';
       
-      if (fStr >= fDesdeStr && fStr <= fHastaStr) {
+      if (fStr >= fDesdeStr && fStr <= fHastaStr && resp === usuarioActual) {
         ingresosPeriodo += m;
         if(ingresosPorResp[resp] !== undefined) ingresosPorResp[resp] += m;
         const targetUser = ingresosPorRespCat[resp] ? resp : 'Jhonathan';
         ingresosPorRespCat[targetUser][cat] = (ingresosPorRespCat[targetUser][cat] || 0) + m;
+        movimientos.push({ id: i.id, tipo: 'Ingreso', fecha: fStr, categoria: cat, monto: m, responsable: resp, detalle: i.comentario || i.descripcion || '' });
       }
-      movimientos.push({ id: i.id, tipo: 'Ingreso', fecha: fStr, categoria: cat, monto: m, responsable: resp, detalle: i.comentario || i.descripcion || '' });
     });
 
     cacheDatos.gastos.forEach(g => {
@@ -773,21 +779,21 @@ function procesarYRenderizarDashboard() {
       const resp = g.responsable || 'Jhonathan';
       const cat = g.categoria || 'Otros';
       
-      if (fStr >= fDesdeStr && fStr <= fHastaStr) {
+      if (fStr >= fDesdeStr && fStr <= fHastaStr && resp === usuarioActual) {
         gastosPeriodo += m;
         gastosPorCat[cat] = (gastosPorCat[cat] || 0) + m;
         const grp = grupoDeCat[cat] || 'General';
         if (!gastosPorGrupo[grp]) gastosPorGrupo[grp] = { total: 0, subcats: {} };
         gastosPorGrupo[grp].total += m;
         gastosPorGrupo[grp].subcats[cat] = (gastosPorGrupo[grp].subcats[cat] || 0) + m;
+        movimientos.push({ id: g.id, tipo: 'Gasto', fecha: fStr, categoria: cat, monto: m, responsable: resp, detalle: g.descripcion || '' });
       }
-      movimientos.push({ id: g.id, tipo: 'Gasto', fecha: fStr, categoria: cat, monto: m, responsable: resp, detalle: g.descripcion || '' });
     });
 
     if(document.getElementById('periodoIngresos')) document.getElementById('periodoIngresos').innerText = S(ingresosPeriodo);
     if(document.getElementById('periodoGastos')) document.getElementById('periodoGastos').innerText = S(gastosPeriodo);
-    if(document.getElementById('periodoJhoIn')) document.getElementById('periodoJhoIn').innerText = 'Jho: ' + S(ingresosPorResp['Jhonathan'] || 0);
-    if(document.getElementById('periodoSinIn')) document.getElementById('periodoSinIn').innerText = 'Sin: ' + S(ingresosPorResp['Sindy'] || 0);
+    if(document.getElementById('periodoJhoIn')) document.getElementById('periodoJhoIn').innerText = 'Jho: ' + (usuarioActual === 'Jhonathan' ? S(ingresosPorResp['Jhonathan'] || 0) : '---');
+    if(document.getElementById('periodoSinIn')) document.getElementById('periodoSinIn').innerText = 'Sin: ' + (usuarioActual === 'Sindy' ? S(ingresosPorResp['Sindy'] || 0) : '---');
 
     const resPer = ingresosPeriodo - gastosPeriodo;
     const elRes = document.getElementById('periodoResultado');
@@ -812,7 +818,7 @@ function procesarYRenderizarDashboard() {
 
     if (panelIngCat) {
         panelIngCat.innerHTML = '';
-        ['Jhonathan', 'Sindy'].forEach(resp => {
+        [usuarioActual].forEach(resp => {
             const catsUser = ingresosPorRespCat[resp] || {};
             const arrIngUser = Object.keys(catsUser).map(c => ({ cat: c, monto: catsUser[c] })).sort((a,b) => b.monto - a.monto);
 
@@ -1323,7 +1329,11 @@ window.editarMov = function(id, tipo) {
   if(getE('editMovTipo')) getE('editMovTipo').value = tipo;
   if(getE('editMovMonto')) getE('editMovMonto').value = item.monto;
   if(getE('editMovFecha')) getE('editMovFecha').value = item.fecha ? String(item.fecha).substring(0, 10) : '';
-  if(getE('editMovResponsable')) getE('editMovResponsable').value = item.responsable || 'Jhonathan';
+    if(getE('editMovResponsable')) {
+      getE('editMovResponsable').value = item.responsable || 'Jhonathan';
+      getE('editMovResponsable').disabled = true;
+      getE('editMovResponsable').classList.add('opacity-70');
+  }
   if(getE('editMovDetalle')) getE('editMovDetalle').value = item.descripcion || item.comentario || '';
 
   const selCat = getE('editMovCategoria');
