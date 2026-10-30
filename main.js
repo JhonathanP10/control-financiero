@@ -586,6 +586,49 @@ function garantizarContenedoresDashboard() {
   const dashView = document.getElementById('viewDash');
   if (!dashView) return;
 
+  
+  if (!document.getElementById('panelMetasAhorroContenedor')) {
+    let divMetas = document.createElement('div');
+    divMetas.id = 'panelMetasAhorroContenedor';
+    divMetas.className = 'bg-slate-900 rounded-3xl p-4 border border-slate-800 shadow-xl shadow-slate-900/10 mb-4 animate-fade-in relative overflow-hidden';
+    divMetas.innerHTML = `
+      <div class="absolute -top-12 -right-12 w-32 h-32 bg-sky-500/10 rounded-full blur-2xl pointer-events-none"></div>
+      <div class="flex justify-between items-center mb-4 relative z-10">
+        <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+          <i class="fa-solid fa-bullseye text-sky-400"></i> Metas de Ahorro
+        </h3>
+        <span class="text-[9px] font-bold text-sky-300 bg-sky-500/20 px-2 py-1 rounded-lg border border-sky-500/30">Mockup Visual</span>
+      </div>
+      <div id="panelMetasAhorro" class="space-y-3 relative z-10">
+          <div class="bg-slate-800/60 p-3 rounded-2xl border border-slate-700/50 hover:bg-slate-800 transition-colors cursor-pointer">
+              <div class="flex justify-between items-end mb-1.5">
+                  <span class="text-[11px] font-bold text-slate-200">Fondo de Emergencia</span>
+                  <span class="text-[10px] text-slate-400 font-medium"><b class="text-white">S/ 1,200.00</b> / S/ 5,000.00</span>
+              </div>
+              <div class="w-full bg-slate-950 rounded-full h-1.5 mb-1"><div class="bg-sky-400 h-1.5 rounded-full transition-all" style="width: 24%"></div></div>
+              <p class="text-[9px] text-slate-500 text-right">Faltan S/ 3,800.00</p>
+          </div>
+          <div class="bg-slate-800/60 p-3 rounded-2xl border border-slate-700/50 hover:bg-slate-800 transition-colors cursor-pointer">
+              <div class="flex justify-between items-end mb-1.5">
+                  <span class="text-[11px] font-bold text-slate-200">Mantenimiento Auto</span>
+                  <span class="text-[10px] text-slate-400 font-medium"><b class="text-white">S/ 450.00</b> / S/ 800.00</span>
+              </div>
+              <div class="w-full bg-slate-950 rounded-full h-1.5 mb-1"><div class="bg-emerald-400 h-1.5 rounded-full transition-all" style="width: 56%"></div></div>
+              <p class="text-[9px] text-slate-500 text-right">Faltan S/ 350.00</p>
+          </div>
+      </div>
+    `;
+    
+    // Inyectar antes del panel de Presupuestos para que quede en el lado principal/izquierdo
+    const pPres = document.getElementById('panelPresupuestos');
+    const pCard = pPres ? pPres.closest('.bg-white') : null;
+    if (pCard && pCard.parentNode) {
+        pCard.parentNode.insertBefore(divMetas, pCard);
+    } else {
+        dashView.appendChild(divMetas);
+    }
+  }
+
   if (!document.getElementById('panelPresupuestos')) {
     let divPres = document.createElement('div');
     divPres.className = 'bg-white rounded-3xl p-4 border border-slate-200/80 shadow-sm mb-4 animate-fade-in';
@@ -1555,3 +1598,4 @@ window.togglePorTipo = function() {
 }
 
 verificarAutenticacion();
+Mostrando main_metas.js.
