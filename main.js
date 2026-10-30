@@ -1571,35 +1571,43 @@ function inicializarModuloMetas() {
   if (!viewMetas) {
       viewMetas = document.createElement('div');
       viewMetas.id = 'viewMetas';
-      // Mismas clases contenedoras que las otras vistas
       viewMetas.className = 'w-full pb-24 lg:pb-8 px-4 max-w-7xl mx-auto hidden';
       dashView.parentNode.insertBefore(viewMetas, dashView.nextSibling);
   }
 
-  // Clonar e inyectar el botón en el menú inferior
+  // Clonar e inyectar el botón en TODOS los menús (Móvil y Escritorio)
   const navItems = document.querySelectorAll('.nav-item');
-  if (navItems.length > 0 && !document.querySelector('.nav-item[data-vista="metas"]')) {
-      const navContainer = navItems[0].parentNode;
-      const btnMetas = navItems[0].cloneNode(true);
-      
-      btnMetas.dataset.vista = 'metas';
-      btnMetas.classList.remove('activo');
-      
-      // Mantenemos las clases de flexbox, cambiamos icono y texto
-      btnMetas.innerHTML = '<i class="fa-solid fa-bullseye text-lg mb-1 block"></i><span class="text-[10px] font-bold">Metas</span>';
-      
-      // Inyectamos antes del botón de Configuración (que suele ser el último)
-      if (navContainer.children.length >= 4) {
-          navContainer.insertBefore(btnMetas, navContainer.children[3]);
-      } else {
-          navContainer.appendChild(btnMetas);
-      }
-      
-      // Evento para cambiar de vista
-      btnMetas.addEventListener('click', () => mostrarVista('metas'));
-  }
-}
+  const navContainers = new Set();
+  navItems.forEach(item => navContainers.add(item.parentNode));
 
+  navContainers.forEach(navContainer => {
+      // Evitar duplicados si ya se inyectó en este contenedor
+      if (!navContainer.querySelector('.nav-item[data-vista="metas"]')) {
+          const templateBtn = navContainer.querySelector('.nav-item');
+          if (!templateBtn) return;
+          
+          const btnMetas = templateBtn.cloneNode(true);
+          btnMetas.dataset.vista = 'metas';
+          btnMetas.classList.remove('activo');
+          
+          // Reemplazar el ícono y texto manteniendo las clases base del botón original
+          btnMetas.innerHTML = '<i class="fa-solid fa-bullseye text-lg mb-1 block"></i><span class="text-[10px] font-bold">Metas</span>';
+          
+          // Buscar el botón de 'Ajustes' o 'Config' para ponerlo justo antes
+          const btnAjustes = navContainer.querySelector('.nav-item[data-vista="config"]');
+          
+          if (btnAjustes) {
+              navContainer.insertBefore(btnMetas, btnAjustes);
+          } else {
+              // Si no hay ajustes, lo ponemos al final
+              navContainer.appendChild(btnMetas);
+          }
+          
+          // Asignar el evento para cambiar de vista
+          btnMetas.addEventListener('click', () => mostrarVista('metas'));
+      }
+  });
+}
 
 window.renderMetasAhorro = function() {
     const contenedor = document.getElementById('viewMetas');
