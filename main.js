@@ -296,7 +296,7 @@ window.cambiarClaveWeb = async function(e) {
 }
 
 function mostrarVista(vista) {
-  const mapa = { dash: 'viewDash', registro: 'viewRegistro', creditos: 'viewDeudas', config: 'viewConfig' };
+  const mapa = { dash: 'viewDash', registro: 'viewRegistro', creditos: 'viewDeudas', config: 'viewConfig', metas: 'viewMetas' };
   Object.keys(mapa).forEach(v => {
     const el = document.getElementById(mapa[v]);
     if(el) el.classList.toggle('hidden', v !== vista);
@@ -305,7 +305,7 @@ function mostrarVista(vista) {
     const activo = b.dataset.vista === vista || (vista === 'creditos' && b.dataset.vista === 'deudas');
     b.classList.toggle('activo', activo);
   });
-  const titulos = { dash: 'Panel General', registro: 'Nuevo Registro', creditos: 'Créditos Pendientes', config: 'Ajustes' };
+  const titulos = { dash: 'Panel General', registro: 'Nuevo Registro', creditos: 'Créditos Pendientes', config: 'Ajustes', metas: 'Metas de Ahorro' };
   const titMovil = document.getElementById('tituloVistaMovil');
   if(titMovil) titMovil.innerText = titulos[vista];
   
@@ -418,6 +418,8 @@ window.aplicarRango = function() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  inicializarModuloMetas();
+  renderMetasAhorro();
 
   // --- CORRECCIÓN NATIVA DE ESPACIADO (SIN HUECOS BLANCOS) ---
   // 1. Limpiar cualquier bloque extra del intento anterior
@@ -1555,3 +1557,107 @@ window.togglePorTipo = function() {
 }
 
 verificarAutenticacion();
+
+
+function inicializarModuloMetas() {
+  const dashView = document.getElementById('viewDash');
+  if (!dashView) return;
+
+  // Crear contenedor de la vista Metas
+  let viewMetas = document.getElementById('viewMetas');
+  if (!viewMetas) {
+      viewMetas = document.createElement('div');
+      viewMetas.id = 'viewMetas';
+      // Mismas clases contenedoras que las otras vistas
+      viewMetas.className = 'w-full pb-24 lg:pb-8 px-4 max-w-7xl mx-auto hidden';
+      dashView.parentNode.insertBefore(viewMetas, dashView.nextSibling);
+  }
+
+  // Clonar e inyectar el botón en el menú inferior
+  const navItems = document.querySelectorAll('.nav-item');
+  if (navItems.length > 0 && !document.querySelector('.nav-item[data-vista="metas"]')) {
+      const navContainer = navItems[0].parentNode;
+      const btnMetas = navItems[0].cloneNode(true);
+      
+      btnMetas.dataset.vista = 'metas';
+      btnMetas.classList.remove('activo');
+      
+      // Mantenemos las clases de flexbox, cambiamos icono y texto
+      btnMetas.innerHTML = '<i class="fa-solid fa-bullseye text-lg mb-1 block"></i><span class="text-[10px] font-bold">Metas</span>';
+      
+      // Inyectamos antes del botón de Configuración (que suele ser el último)
+      if (navContainer.children.length >= 4) {
+          navContainer.insertBefore(btnMetas, navContainer.children[3]);
+      } else {
+          navContainer.appendChild(btnMetas);
+      }
+      
+      // Evento para cambiar de vista
+      btnMetas.addEventListener('click', () => mostrarVista('metas'));
+  }
+}
+
+window.renderMetasAhorro = function() {
+    const contenedor = document.getElementById('viewMetas');
+    if (!contenedor) return;
+
+    let html = `
+    <div class="space-y-4 mt-4 animate-fade-in">
+        <div class="bg-slate-900 rounded-3xl p-5 border border-slate-800 shadow-xl shadow-slate-900/10 relative overflow-hidden">
+            <div class="absolute -top-12 -right-12 w-32 h-32 bg-sky-500/10 rounded-full blur-2xl pointer-events-none"></div>
+            <div class="flex justify-between items-center mb-6 relative z-10">
+                <div>
+                    <h2 class="text-lg font-black text-white flex items-center gap-2">
+                        <i class="fa-solid fa-bullseye text-sky-400"></i> Metas
+                    </h2>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Dinero reservado: <b class="text-white">S/ 1,650.00</b></p>
+                </div>
+                <button class="bg-sky-500 hover:bg-sky-400 active:scale-95 text-white w-9 h-9 rounded-xl flex items-center justify-center shadow-lg shadow-sky-500/30 transition-all">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-3 relative z-10">
+                <div class="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/50 hover:bg-slate-800 transition-colors cursor-pointer group shadow-sm">
+                    <div class="flex justify-between items-end mb-2">
+                        <div>
+                            <span class="text-xs font-bold text-slate-200 block mb-0.5">Fondo de Emergencia</span>
+                            <span class="text-[9px] text-slate-400">Progreso: 24%</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-[10px] text-slate-300 font-medium"><b class="text-white text-sm">S/ 1,200</b> / S/ 5,000</span>
+                        </div>
+                    </div>
+                    <div class="w-full bg-slate-950 rounded-full h-2 mb-2"><div class="bg-sky-400 h-2 rounded-full transition-all" style="width: 24%"></div></div>
+                    <p class="text-[10px] text-sky-400 font-bold text-right group-hover:text-sky-300 transition-colors">Aportar dinero <i class="fa-solid fa-arrow-right ml-1"></i></p>
+                </div>
+
+                <div class="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/50 hover:bg-slate-800 transition-colors cursor-pointer group shadow-sm">
+                    <div class="flex justify-between items-end mb-2">
+                        <div>
+                            <span class="text-xs font-bold text-slate-200 block mb-0.5">Mantenimiento Auto</span>
+                            <span class="text-[9px] text-slate-400">Progreso: 56%</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-[10px] text-slate-300 font-medium"><b class="text-white text-sm">S/ 450</b> / S/ 800</span>
+                        </div>
+                    </div>
+                    <div class="w-full bg-slate-950 rounded-full h-2 mb-2"><div class="bg-emerald-400 h-2 rounded-full transition-all" style="width: 56%"></div></div>
+                    <p class="text-[10px] text-emerald-400 font-bold text-right group-hover:text-emerald-300 transition-colors">Aportar dinero <i class="fa-solid fa-arrow-right ml-1"></i></p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-sky-50 rounded-2xl border border-sky-100 p-4 flex items-start gap-3 shadow-sm mx-1">
+            <div class="w-8 h-8 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center flex-shrink-0 mt-0.5"><i class="fa-solid fa-circle-info"></i></div>
+            <div>
+                <p class="text-xs font-bold text-sky-800 mb-1">Nueva sección independiente</p>
+                <p class="text-[10px] text-sky-700/90 leading-relaxed">
+                    Esta es una vista previa de la sección de ahorros. Cuando decidas activarla por completo, crearemos la tabla <b>"metas"</b> en Supabase para que los botones de aporte funcionen y descuenten el dinero de tu saldo principal.
+                </p>
+            </div>
+        </div>
+    </div>`;
+    
+    contenedor.innerHTML = html;
+};
