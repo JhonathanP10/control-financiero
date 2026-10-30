@@ -9,7 +9,7 @@ let usuarioActual = null;
 let periodo = { preset: 'mes', offset: 0, desde: null, hasta: null };
 let filtroBusquedaMovimientos = '';
 let cacheDatos = { 
-  gastos: [], ingresos: [], configuracion: [], 
+  gastos: [], ingresos: [], configuracion: [], metas: [],
   bcp: {tabla:'bcp_credito', data:[]}, 
   bbva_credito: {tabla:'bbva_credito', data:[]}, 
   bbva_tarjeta: {tabla:'bbva_tarjeta', data:[]} 
@@ -521,15 +521,17 @@ document.addEventListener('DOMContentLoaded', () => {
 /* CARGA BLINDADA */
 window.cargarDashboard = async function(silencioso = false) {
   try {
-    const [resG, resI, resC] = await Promise.all([
+    const [resG, resI, resC, resM] = await Promise.all([
       safeQuerySupabase(() => supabase.from('gastos').select('*').limit(50000).order('id', { ascending: false })),
       safeQuerySupabase(() => supabase.from('ingresos').select('*').limit(50000).order('id', { ascending: false })),
-      safeQuerySupabase(() => supabase.from('configuracion').select('*').limit(5000))
+      safeQuerySupabase(() => supabase.from('configuracion').select('*').limit(5000)),
+      safeQuerySupabase(() => supabase.from('metas').select('*').order('id', { ascending: true }))
     ]);
 
     cacheDatos.gastos = resG.data.map(normalizar);
     cacheDatos.ingresos = resI.data.map(normalizar);
     cacheDatos.configuracion = resC.data.map(normalizar);
+    cacheDatos.metas = resM.data.map(normalizar);
 
     cacheDatos.bcp = await fetchSafe('bcp_credito', 'bcp', 'bcpcredito');
     cacheDatos.bbva_credito = await fetchSafe('bbva_credito', 'bbvacredito', 'bbva');
@@ -991,6 +993,7 @@ function procesarYRenderizarDashboard() {
 
     renderConfiguracion();
     renderFondos();
+    if(window.renderMetasAhorro) window.renderMetasAhorro();
   } catch (err) {
     console.error("Error en renderizado:", err);
   }
@@ -1597,9 +1600,15 @@ function inicializarModuloMetas() {
   }
 }
 
+
 window.renderMetasAhorro = function() {
     const contenedor = document.getElementById('viewMetas');
     if (!contenedor) return;
+
+    let totalAhorrado = 0;
+    (cacheDatos.metas || []).forEach(m => {
+        totalAhorrado += (Number(m.monto_actual) || 0);
+    });
 
     let html = `
     <div class="space-y-4 mt-4 animate-fade-in">
@@ -1608,56 +1617,217 @@ window.renderMetasAhorro = function() {
             <div class="flex justify-between items-center mb-6 relative z-10">
                 <div>
                     <h2 class="text-lg font-black text-white flex items-center gap-2">
-                        <i class="fa-solid fa-bullseye text-sky-400"></i> Metas
+                        <i class="fa-solid fa-bullseye text-sky-400"></i> Metas de Ahorro
                     </h2>
-                    <p class="text-[10px] text-slate-400 mt-0.5">Dinero reservado: <b class="text-white">S/ 1,650.00</b></p>
+                    <p class="text-[10px] text-slate-400 mt-0.5">Dinero reservado global: <b class="text-white">${S(totalAhorrado)}</b></p>
                 </div>
-                <button class="bg-sky-500 hover:bg-sky-400 active:scale-95 text-white w-9 h-9 rounded-xl flex items-center justify-center shadow-lg shadow-sky-500/30 transition-all">
+                <button onclick="window.abrirModalNuevaMeta()" class="bg-sky-500 hover:bg-sky-400 active:scale-95 text-white w-9 h-9 rounded-xl flex items-center justify-center shadow-lg shadow-sky-500/30 transition-all flex-shrink-0">
                     <i class="fa-solid fa-plus"></i>
                 </button>
             </div>
             
             <div class="space-y-3 relative z-10">
-                <div class="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/50 hover:bg-slate-800 transition-colors cursor-pointer group shadow-sm">
-                    <div class="flex justify-between items-end mb-2">
-                        <div>
-                            <span class="text-xs font-bold text-slate-200 block mb-0.5">Fondo de Emergencia</span>
-                            <span class="text-[9px] text-slate-400">Progreso: 24%</span>
-                        </div>
-                        <div class="text-right">
-                            <span class="text-[10px] text-slate-300 font-medium"><b class="text-white text-sm">S/ 1,200</b> / S/ 5,000</span>
-                        </div>
-                    </div>
-                    <div class="w-full bg-slate-950 rounded-full h-2 mb-2"><div class="bg-sky-400 h-2 rounded-full transition-all" style="width: 24%"></div></div>
-                    <p class="text-[10px] text-sky-400 font-bold text-right group-hover:text-sky-300 transition-colors">Aportar dinero <i class="fa-solid fa-arrow-right ml-1"></i></p>
-                </div>
+    `;
 
-                <div class="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/50 hover:bg-slate-800 transition-colors cursor-pointer group shadow-sm">
+    if (!cacheDatos.metas || cacheDatos.metas.length === 0) {
+        html += `<p class="text-xs text-slate-400 text-center py-4">No tienes metas de ahorro registradas.</p>`;
+    } else {
+        cacheDatos.metas.forEach(m => {
+            const actual = Number(m.monto_actual) || 0;
+            const obj = Number(m.monto_objetivo) || 1;
+            const porc = Math.min(100, Math.round((actual / obj) * 100));
+            const color = porc >= 100 ? 'bg-emerald-400' : 'bg-sky-400';
+            const hoverColor = porc >= 100 ? 'group-hover:text-emerald-300' : 'group-hover:text-sky-300';
+            const textColor = porc >= 100 ? 'text-emerald-400' : 'text-sky-400';
+
+            html += `
+                <div onclick="window.abrirModalEdicionMeta(${m.id})" class="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/50 hover:bg-slate-800 transition-colors cursor-pointer group shadow-sm">
                     <div class="flex justify-between items-end mb-2">
                         <div>
-                            <span class="text-xs font-bold text-slate-200 block mb-0.5">Mantenimiento Auto</span>
-                            <span class="text-[9px] text-slate-400">Progreso: 56%</span>
+                            <span class="text-xs font-bold text-slate-200 block mb-0.5">${esc(m.nombre)}</span>
+                            <span class="text-[9px] text-slate-400">Progreso: ${porc}%</span>
                         </div>
                         <div class="text-right">
-                            <span class="text-[10px] text-slate-300 font-medium"><b class="text-white text-sm">S/ 450</b> / S/ 800</span>
+                            <span class="text-[10px] text-slate-300 font-medium"><b class="text-white text-sm">${S(actual)}</b> / ${S(obj)}</span>
                         </div>
                     </div>
-                    <div class="w-full bg-slate-950 rounded-full h-2 mb-2"><div class="bg-emerald-400 h-2 rounded-full transition-all" style="width: 56%"></div></div>
-                    <p class="text-[10px] text-emerald-400 font-bold text-right group-hover:text-emerald-300 transition-colors">Aportar dinero <i class="fa-solid fa-arrow-right ml-1"></i></p>
+                    <div class="w-full bg-slate-950 rounded-full h-2 mb-2"><div class="${color} h-2 rounded-full transition-all" style="width: ${porc}%"></div></div>
+                    <p class="text-[10px] ${textColor} font-bold text-right ${hoverColor} transition-colors">Gestionar Meta <i class="fa-solid fa-arrow-right ml-1"></i></p>
                 </div>
-            </div>
-        </div>
-        
-        <div class="bg-sky-50 rounded-2xl border border-sky-100 p-4 flex items-start gap-3 shadow-sm mx-1">
-            <div class="w-8 h-8 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center flex-shrink-0 mt-0.5"><i class="fa-solid fa-circle-info"></i></div>
-            <div>
-                <p class="text-xs font-bold text-sky-800 mb-1">Nueva sección independiente</p>
-                <p class="text-[10px] text-sky-700/90 leading-relaxed">
-                    Esta es una vista previa de la sección de ahorros. Cuando decidas activarla por completo, crearemos la tabla <b>"metas"</b> en Supabase para que los botones de aporte funcionen y descuenten el dinero de tu saldo principal.
-                </p>
+            `;
+        });
+    }
+
+    html += `
             </div>
         </div>
     </div>`;
     
     contenedor.innerHTML = html;
 };
+
+// CRUD PARA METAS
+window.abrirModalNuevaMeta = function() {
+    let modal = document.getElementById('modalNuevaMeta');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modalNuevaMeta';
+        modal.className = 'fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4';
+        document.body.appendChild(modal);
+    }
+    
+    modal.innerHTML = `
+    <div class="bg-white rounded-3xl p-5 max-w-sm w-full shadow-2xl animate-fade-in border border-slate-200">
+        <h3 class="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <div class="w-8 h-8 rounded-xl bg-sky-50 text-sky-500 flex items-center justify-center"><i class="fa-solid fa-bullseye"></i></div>
+            Crear Nueva Meta
+        </h3>
+        
+        <form onsubmit="window.guardarNuevaMeta(event)" class="space-y-3">
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Nombre de la Meta</label>
+                <input type="text" id="nuevaMetaNombre" required placeholder="Ej: Viaje, Auto, Emergencia..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold text-slate-800 outline-none focus:border-sky-500">
+            </div>
+            
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Monto Objetivo (Meta Final)</label>
+                <input type="number" id="nuevaMetaObjetivo" required step="0.01" min="1" placeholder="0.00" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold text-slate-800 outline-none focus:border-sky-500">
+            </div>
+            
+            <div class="flex gap-2 mt-5">
+                <button type="button" onclick="document.getElementById('modalNuevaMeta').classList.add('hidden')" class="flex-1 bg-slate-100 active:scale-95 text-slate-600 font-bold py-3 rounded-xl text-xs transition-all">Cancelar</button>
+                <button type="submit" class="flex-1 bg-sky-500 active:scale-95 text-white font-bold py-3 rounded-xl text-xs shadow-lg shadow-sky-500/30 transition-all">Crear Meta</button>
+            </div>
+        </form>
+    </div>`;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+window.guardarNuevaMeta = async function(e) {
+    if(e) e.preventDefault();
+    const nombre = document.getElementById('nuevaMetaNombre').value.trim();
+    const objetivo = parseFloat(document.getElementById('nuevaMetaObjetivo').value) || 0;
+    
+    if(!nombre || objetivo <= 0) { toast('Revisa los datos', false); return; }
+    
+    try {
+        const btn = document.querySelector('#modalNuevaMeta button[type="submit"]');
+        if(btn) { btn.innerText = 'Guardando...'; btn.disabled = true; }
+
+        const payload = {
+            nombre: nombre,
+            monto_objetivo: objetivo,
+            monto_actual: 0
+        };
+
+        const { error } = await supabase.from('metas').insert([payload]);
+        if (error) throw error;
+        
+        toast('Meta creada con éxito', true);
+        document.getElementById('modalNuevaMeta').classList.add('hidden');
+        cargarDashboard();
+    } catch(err) {
+        toast('Error al crear meta: ' + err.message, false);
+        const btn = document.querySelector('#modalNuevaMeta button[type="submit"]');
+        if(btn) { btn.innerText = 'Crear Meta'; btn.disabled = false; }
+    }
+}
+
+window.abrirModalEdicionMeta = function(id) {
+    const meta = (cacheDatos.metas || []).find(m => m.id === id);
+    if (!meta) return;
+    
+    let modal = document.getElementById('modalEdicionMeta');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modalEdicionMeta';
+        modal.className = 'fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4';
+        document.body.appendChild(modal);
+    }
+    
+    modal.innerHTML = `
+    <div class="bg-white rounded-3xl p-5 max-w-sm w-full shadow-2xl animate-fade-in border border-slate-200">
+        <h3 class="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <div class="w-8 h-8 rounded-xl bg-sky-50 text-sky-500 flex items-center justify-center"><i class="fa-solid fa-pen"></i></div>
+            Gestionar Meta
+        </h3>
+        
+        <form onsubmit="window.guardarEdicionMeta(event, ${meta.id})" class="space-y-3">
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Nombre de la Meta</label>
+                <input type="text" id="editMetaNombre" required value="${esc(meta.nombre)}" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold text-slate-800 outline-none focus:border-sky-500">
+            </div>
+            
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Monto Actual</label>
+                    <input type="number" id="editMetaActual" required step="0.01" min="0" value="${meta.monto_actual || 0}" class="w-full bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl p-3 text-xs font-bold outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Monto Objetivo</label>
+                    <input type="number" id="editMetaObjetivo" required step="0.01" min="1" value="${meta.monto_objetivo || 1}" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold text-slate-800 outline-none focus:border-sky-500">
+                </div>
+            </div>
+            
+            <div class="flex flex-col gap-2 mt-5">
+                <div class="flex gap-2">
+                    <button type="button" onclick="document.getElementById('modalEdicionMeta').classList.add('hidden')" class="flex-1 bg-slate-100 active:scale-95 text-slate-600 font-bold py-3 rounded-xl text-xs transition-all">Cancelar</button>
+                    <button type="submit" class="flex-1 bg-sky-500 active:scale-95 text-white font-bold py-3 rounded-xl text-xs shadow-lg shadow-sky-500/30 transition-all">Guardar</button>
+                </div>
+                <button type="button" onclick="window.eliminarMeta(${meta.id})" class="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold py-3 rounded-xl transition-all text-[11px] border border-rose-100 flex items-center justify-center gap-1 mt-1">
+                    <i class="fa-solid fa-trash"></i> Eliminar Meta Permanentemente
+                </button>
+            </div>
+        </form>
+    </div>`;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+window.guardarEdicionMeta = async function(e, id) {
+    if(e) e.preventDefault();
+    const nombre = document.getElementById('editMetaNombre').value.trim();
+    const objetivo = parseFloat(document.getElementById('editMetaObjetivo').value) || 0;
+    const actual = parseFloat(document.getElementById('editMetaActual').value) || 0;
+    
+    if(!nombre || objetivo <= 0 || actual < 0) { toast('Revisa los datos', false); return; }
+    
+    try {
+        const btn = document.querySelector('#modalEdicionMeta button[type="submit"]');
+        if(btn) { btn.innerText = 'Guardando...'; btn.disabled = true; }
+
+        const payload = {
+            nombre: nombre,
+            monto_objetivo: objetivo,
+            monto_actual: actual
+        };
+
+        const { error } = await supabase.from('metas').update(payload).eq('id', id);
+        if (error) throw error;
+        
+        toast('Meta actualizada', true);
+        document.getElementById('modalEdicionMeta').classList.add('hidden');
+        cargarDashboard();
+    } catch(err) {
+        toast('Error al actualizar: ' + err.message, false);
+        const btn = document.querySelector('#modalEdicionMeta button[type="submit"]');
+        if(btn) { btn.innerText = 'Guardar'; btn.disabled = false; }
+    }
+}
+
+window.eliminarMeta = async function(id) {
+    if(!confirm('¿Estás seguro de eliminar esta meta? El dinero apartado no se registrará como gasto, solo se borrará la meta de la lista.')) return;
+    
+    try {
+        const { error } = await supabase.from('metas').delete().eq('id', id);
+        if (error) throw error;
+        
+        toast('Meta eliminada', true);
+        document.getElementById('modalEdicionMeta').classList.add('hidden');
+        cargarDashboard();
+    } catch(err) {
+        toast('Error al eliminar: ' + err.message, false);
+    }
+}
+
